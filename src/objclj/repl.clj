@@ -1,4 +1,5 @@
 (ns objclj.repl
+  (:gen-class)
   (:use objclj.codegen))
 
 (defn -main [& args]
