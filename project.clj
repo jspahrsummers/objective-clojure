@@ -3,4 +3,4 @@
   :url "https://github.com/jspahrsummers/objective-clojure"
   :license "Public Domain"
   :main objclj.repl
-  :dependencies [[org.clojure/clojure "1.3.0"], [org.clojure/core.match "0.2.0-alpha10"]])
+  :dependencies [[org.clojure/clojure "1.4.0"] [org.clojure/core.match "0.2.0-alpha10"]])
