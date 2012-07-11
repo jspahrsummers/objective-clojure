@@ -1,6 +1,7 @@
 (ns objclj.repl
   (:gen-class)
-  (:use [objclj.codegen :only [codegen]]))
+  (:use [objclj.codegen :only [codegen]])
+  (:use clojure.stacktrace))
 
 (defn -main [& args]
   (loop []
@@ -14,8 +15,8 @@
         (println (codegen (read)))
         true
 
-        (catch Exception e
-          (println "*** Caught exception" e)
+        (catch Exception ex
+          (e)
           true))
 
       (recur))))
