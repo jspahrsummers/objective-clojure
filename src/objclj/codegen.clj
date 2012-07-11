@@ -5,14 +5,13 @@
 ;;; Objective-C ASTs and generation
 ;;;
 
-(def bool-literal)
+(derive ::bool-literal ::expr)
 
-(defn objc [ast]
-  "Translates an Objective-C AST into a string of Objective-C code"
-  (match ast
-         [bool-literal true] "YES"
-         [bool-literal false] "NO"
-         _ nil))
+(defmulti objc
+  #(first %))
+
+(defmethod objc :bool-literal [[_ b]]
+  (if b "YES" "NO"))
 
 ;;;
 ;;; Translating forms to Objective-C
@@ -21,8 +20,8 @@
 (defn gen-form [form]
   "Generates an Objective-C AST from a Clojure form"
   (match form
-         true [bool-literal true]
-         false [bool-literal false]
+         true [:bool-literal true]
+         false [:bool-literal false]
 
          _ nil))
 
