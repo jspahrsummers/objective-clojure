@@ -26,6 +26,9 @@
 (make-clean-ast :false _
     false)
 
+(make-clean-ast :list [_ _ forms _ _]
+    nil)
+
 (make-clean-ast :form [_ f]
     (clean-ast f))
 
@@ -45,7 +48,7 @@
 (def whitespace-char (lpegs '| "\n\r\t ,"))
 
 ; Semicolon followed by any number of non-newline characters
-(def line-comment [ \; '(* '(% \newline )) ])
+(def line-comment [ \; '(* (% \newline )) ])
 
 (def grammar
   "PEG grammar for Clojure"
@@ -55,7 +58,8 @@
     :true (pegs "true")
     :false (pegs "false")
     :symbol [ symbol-start (list '* symbol-char) ]
-    :form [ :_* '(| :nil :true :false :symbol ) ]
+    :list [ \( '(* :form) :_* \) ]
+    :form [ :_* '(| :nil :true :false :list :symbol ) ]
   })
 
 (validate grammar)
