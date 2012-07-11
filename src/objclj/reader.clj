@@ -1,6 +1,38 @@
 (ns objclj.reader
   (:use com.lithinos.amotoen.core))
 
+;;;
+;;; AST cleanup
+;;;
+
+(defmulti clean-ast
+  "Turns an Amotoen AST into a more representative Clojure data structure"
+  #(first (keys %)))
+
+(defmacro make-clean-ast [key val & exprs]
+  "Defines a method of multimethod clean-ast, matching against the given key, and destructuring to the given value"
+  `(defmethod clean-ast ~key [{ ~val ~key }]
+     ~@exprs))
+
+(make-clean-ast :symbol [x xs]
+    (symbol (str x (doall xs))))
+
+(make-clean-ast :nil _
+    nil)
+
+(make-clean-ast :true _
+    true)
+
+(make-clean-ast :false _
+    false)
+
+(make-clean-ast :form [_ f]
+    (clean-ast f))
+
+;;;
+;;; Parsing
+;;;
+
 ;; The following definitions are not part of the PEG grammar itself, so as to not appear in generated ASTs
 
 ; Allow everything but these characters to begin a symbol
@@ -16,6 +48,7 @@
 (def line-comment [ \; '(* '(% \newline )) ])
 
 (def grammar
+  "PEG grammar for Clojure"
   {
     :_* (list '* whitespace-char line-comment)
     :nil (pegs "nil")
@@ -26,25 +59,6 @@
   })
 
 (validate grammar)
-
-(defmulti clean-ast
-  "Turns an Amotoen AST into a more representative Clojure data structure"
-  #(first (keys %)))
-
-(defmethod clean-ast :symbol [{ [x xs] :symbol }]
-    (symbol (str x (doall xs))))
-
-(defmethod clean-ast :nil [{ _ :nil }]
-    nil)
-
-(defmethod clean-ast :true [{ _ :true }]
-    true)
-
-(defmethod clean-ast :false [{ _ :false }]
-    false)
-
-(defmethod clean-ast :form [{ [_ f] :form }]
-    (clean-ast f))
 
 (defn parse [str]
   "Parses a string of Clojure code into an AST"
