@@ -1,7 +1,8 @@
 (ns objclj.repl
   (:gen-class)
+  (:use clojure.stacktrace)
   (:use [objclj.codegen :only [codegen]])
-  (:use clojure.stacktrace))
+  (:use [objclj.reader :only [parse]]))
 
 (defn -main [& args]
   (loop []
@@ -12,7 +13,8 @@
     (if
       (try
         ; TODO: handle end-of-line exceptions from (read), which should terminate the REPL
-        (println (codegen (read)))
+        (println (parse (read-line)))
+        ;(println (codegen (read)))
         true
 
         (catch Exception ex
