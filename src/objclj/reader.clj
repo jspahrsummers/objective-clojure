@@ -1,11 +1,11 @@
 (ns objclj.reader
-  ; Zetta defines many symbols that conflict with builtins
-  (:refer-clojure :exclude [char take-while take])
+  ; Zetta defines some symbols that conflict with builtins
+  (:refer-clojure :exclude [char take-while replicate take])
   (:require [clojure.string :as str])
   (:use clojure.algo.monads)
   (:use [zetta.core :exclude [parse]])
   (:use [zetta.parser.seq :exclude [get ensure whitespace skip-whitespaces]])
-  (:use [zetta.combinators :exclude [replicate]]))
+  (:use zetta.combinators))
 
 ;;;
 ;;; AST structure
@@ -15,13 +15,35 @@
   "An empty Clojure form, which should compile down to nothing."
   nil)
 
-(defn symbol-form [str]
-  "Returns a vector representing a symbol."
-  [ :reader/symbol str ])
+(defn symbol-form [sym]
+  "Returns a vector representing a symbol. sym should be a string."
+  [ :reader/symbol sym ])
+
+(defn keyword-form [kwd]
+  "Returns a vector representing a keyword. kwd should be a string."
+  [ :reader/keyword kwd ])
 
 (defn literal-form [x]
-  "Returns a vector representing a literal value."
+  "Returns a vector representing a literal value. x may be a string, number, character, boolean, or nil. (Use keyword-form for keywords.)"
   [ :reader/literal x ])
+
+(defn set-form [items]
+  "Returns a vector representing a set. items may be any kind of sequence."
+  [ :reader/set items ])
+
+(defn vector-form [items]
+  "Returns a vector representing a vector. items may be any kind of sequence."
+  [ :reader/vector items ])
+
+(defn list-form [items]
+  "Returns a vector representing a list. items may be any kind of sequence."
+  [ :reader/list items ])
+
+(defn map-form [pairs]
+  "Returns a vector representing a map. pairs may be any kind of sequence."
+  (let [keys (map #(nth % 0) pairs)
+        vals (map #(nth % 1) pairs)]
+    [ :reader/map keys vals ]))
 
 ;;;
 ;;; Character classes
@@ -31,8 +53,10 @@
   (or (= c \,) (Character/isWhitespace #^java.lang.Character c)))
 
 ;;;
-;;; Parsers
+;;; Generic parsers
 ;;;
+
+(declare skip-whitespaces)
 
 (defn oneOf [s]
   "Parser that matches any one character in the given string."
@@ -45,6 +69,28 @@
 (defmacro always-fn [fn & more]
   "Parser that does not consume any input, and always returns the result of fn."
   `(always (~fn ~@more)))
+
+(defn surrounded-by [p l r]
+  "Matches character l on the left side of p, and character r on the right side. Returns the result of parser p. Automatically skips spaces within the delimiters."
+  (*> (char l)
+      (<* (>> skip-whitespaces p)
+          (char r))))
+
+(defn parens [p]
+  "Matches parentheses around parser p. Returns the result of parser p."
+  (surrounded-by p \( \)))
+
+(defn brackets [p]
+  "Matches square brackets around parser p. Returns the result of parser p."
+  (surrounded-by p \[ \]))
+
+(defn braces [p]
+  "Matches curly braces around parser p. Returns the result of parser p."
+  (surrounded-by p \{ \}))
+
+;;;
+;;; Clojure-specific parsers
+;;;
 
 (defmacro match-escape-seq [seq rep]
   "Parser that matches a backslash followed by seq. Returns rep."
@@ -129,9 +175,24 @@
                (special-char-literal \newline "newline")
                (<$> literal-form any-token)])))
 
+(declare form)
+
+(defn lst []
+  (<$> list-form
+       (parens (many form))))
+
+(defn vector-literal []
+  (<$> vector-form
+       (brackets (many form))))
+
+(defn map-literal []
+  (<$> map-form
+       (braces (many (replicate 2 form)))))
+
 (def form
   (>> skip-whitespaces
       (choice [nil-literal true-literal false-literal number-literal string-literal char-literal
+               (lst) (vector-literal) (map-literal)
                sym])))
 
 (defn parse [str]
