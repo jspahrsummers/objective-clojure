@@ -25,6 +25,8 @@
 (derive ::null-literal ::expr)
 (derive ::bool-literal ::expr)
 (derive ::number-literal ::expr)
+(derive ::character-literal ::expr)
+(derive ::string-literal ::expr)
 (derive ::selector-literal ::expr)
 (derive ::identifier ::expr)
 (derive ::message-expr ::expr)
@@ -44,6 +46,12 @@
 
 (defmethod objc :number-literal [[_ n]]
   (str "@" n))
+
+(defmethod objc :character-literal [[_ c]]
+  (str "@'" c "'"))
+
+(defmethod objc :string-literal [[_ s]]
+  (str "@\"" s \"""))
 
 (defmethod objc :selector-literal [[_ s]]
   (str "@selector(" s ")"))
@@ -96,11 +104,9 @@
          [:reader/literal false] [:bool-literal false]
          [:reader/literal (n :when number?)] [:number-literal n]
 
-         ; TODO
-         ;[:reader/literal (c :when char?)]
+         [:reader/literal (c :when char?)] [:character-literal c]
 
-         ; TODO
-         ;[:reader/literal (s :when string?)]
+         [:reader/literal (s :when string?)] [:string-literal s]
 
          ; TODO: emit EXTNil
          ;[:reader/literal nil]
