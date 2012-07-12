@@ -162,8 +162,6 @@
          ; TODO
          ;[:reader/list & exprs]
 
-
-         ; TODO: emit NSArray literal
          [:reader/vector items] [:vector-literal (map gen-form items)]
 
          ; TODO: emit NSDictionary literal
