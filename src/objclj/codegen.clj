@@ -1,6 +1,6 @@
 (ns objclj.codegen
-  (:use [clojure.core.match :only [match defpred]])
   (:require [clojure.string :as s])
+  (:use [clojure.core.match :only [match]])
   (:require [objclj.reader :as reader])
   (:use objclj.util))
 
@@ -99,91 +99,95 @@
 ;;; Translating forms to Objective-C
 ;;;
 
-;; Predicates for core.match
-(defpred number? number?)
-(defpred symbol? symbol?)
-(defpred keyword? keyword?)
-(defpred char? char?)
-(defpred string? string?)
+(defmulti gen-form
+  "Generates and returns an Objective-C AST from a Clojure form. The returned value is suitable for later being passed to the objc function."
+  #(type %))
 
-(defn gen-form
-  "Generates and returns an Objective-C element from a Clojure form. The returned value is suitable for later being passed to the objc function."
-  [form]
-  (match form
-         [:reader/literal true] [:bool-literal true]
-         [:reader/literal false] [:bool-literal false]
-         [:reader/literal (n :when number?)] [:number-literal n]
+(defmethod gen-form nil [_]
+  ; TODO: emit EXTNil
+  nil)
 
-         [:reader/literal (c :when char?)] [:character-literal c]
+(defmethod gen-form java.lang.Boolean [b]
+  [:bool-literal b])
 
-         [:reader/literal (s :when string?)] [:nsstring-literal s]
+(defmethod gen-form java.lang.Number [n]
+  [:number-literal n])
 
-         ; TODO: emit EXTNil
-         ;[:reader/literal nil]
+(defmethod gen-form java.lang.Character [c]
+  [:character-literal c])
 
-         [:reader/symbol sym] [:identifier sym]
-         
-         ; TODO: intern a selector
-         ;[:reader/keyword sym]
+(defmethod gen-form java.lang.String [s]
+  [:nsstring-literal s])
 
-         ;; TODO: it's probable that some of these need to be taken care of before hitting the backend
+(defmethod gen-form clojure.lang.Symbol [sym]
+  [:identifier (str sym)])
 
-         ; TODO
-         ;[:reader/list [[:reader/symbol "def"] [:reader/symbol sym] & init?]]
+(defmethod gen-form clojure.lang.Keyword [kwd]
+  ; TODO: intern a selector
+  nil)
 
-         ; TODO
-         ;[:reader/list [[:reader/symbol "if"] test then & else?]]
+(defmethod gen-form clojure.lang.IPersistentVector [items]
+  [:nsarray-literal (map gen-form items)])
 
-         ; TODO
-         ;[:reader/list [[:reader/symbol "do"] & exprs]]
+(defmethod gen-form clojure.lang.IPersistentMap [items]
+  ; TODO: generate an NSDictionary literal
+  nil)
 
-         ; TODO
-         ;[:reader/list [[:reader/symbol "let"] [:reader/vector bindings] & exprs]]
+(defmethod gen-form clojure.lang.IPersistentSet [items]
+  ; TODO: generate an NSSet literal
+  nil)
 
-         ; TODO
-         ;[:reader/list [[:reader/symbol "quote"] form]]
+(defmethod gen-form clojure.lang.IPersistentList [items]
+  (match (str (first items))
+          "." (let [[_ obj sel & args] items]
+                (if (keyword? sel)
+                    ; TODO: support non-literal selectors
+                    (append [:message-expr (gen-form obj) sel] (map gen-form args))))
 
-         ; TODO
-         ;[:reader/list [[:reader/symbol "var"] [:reader/symbol sym]]]
+          ;; TODO: it's probable that some of these need to be taken care of before hitting the backend
 
-         ; TODO
-         ;[:reader/list [[:reader/symbol "fn"] [:reader/vector params] & exprs]]
-         ;[:reader/list [[:reader/symbol "fn"] & overloads]]
+          ; TODO
+          "def" (let [[_ sym init] items])
 
-         ; TODO
-         ;[:reader/list [[:reader/symbol "loop"] [:reader/vector bindings] & exprs]]
+          ; TODO
+          "if" (let [[_ test then else] items])
 
-         ; TODO
-         ;[:reader/list [[:reader/symbol "recur"] & exprs]]
+          ; TODO
+          "do" (let [[_ & exprs] items])
 
-         ; TODO
-         ;[:reader/list [[:reader/symbol "throw"] expr]]
+          ; TODO
+          "let" (let [[_ bindings & exprs] items])
 
-         ; TODO
-         ;[:reader/list [[:reader/symbol "try"] & exprs]]
+          ; TODO
+          "loop" (let [[_ bindings & exprs] items])
 
-         ; TODO
-         ;[:reader/list [[:reader/symbol "monitor-enter"] x]]
+          ; TODO
+          "quote" (let [[_ form] items])
 
-         ; TODO
-         ;[:reader/list [[:reader/symbol "monitor-exit"] x]]
+          ; TODO
+          "var" (let [[_ sym] items])
 
-         [:reader/list [[:reader/symbol "."] obj & args]]
-           (let [[seltype sel] (first args)
-                 args (next args)]
-             (if (= :reader/keyword seltype)
-                 ; TODO: support non-literal selectors
-                 (append [:message-expr (gen-form obj) sel] (map gen-form args))))
+          ; TODO
+          "fn" (let [[_ & overloads] items])
 
-         ; TODO
-         ;[:reader/list & exprs]
+          ; TODO
+          "recur" (let [[_ & exprs] items])
 
-         [:reader/vector items] [:nsarray-literal (map gen-form items)]
+          ; TODO
+          "throw" (let [[_ expr] items])
 
-         ; TODO: emit NSDictionary literal
-         ;[:reader/map keys values]
+          ; TODO
+          "try" (let [[_ & exprs] items])
 
-         _ nil))
+          ; TODO
+          "monitor-enter" (let [[_ x] items])
+
+          ; TODO
+          "monitor-exit" (let [[_ x] items])
+          
+          ; TODO: generate an instance of a CLJList class
+          _ nil
+  ))
 
 ;;;
 ;;; API
