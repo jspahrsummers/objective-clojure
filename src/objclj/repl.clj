@@ -18,7 +18,7 @@
               (println)
               (flush)
               false)
-            (let [ast (parse input)]
+            (let [ast (parse (str input))]
               (println ast)
               (flush)
               (println (codegen ast))
