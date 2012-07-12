@@ -20,6 +20,9 @@
             (let [ast (parse input)]
               (println ast)
               (flush)
+
+              ; TODO: generate code for main()
+              ; TODO: invoke Clang
               (println (codegen ast))
               true)))
 

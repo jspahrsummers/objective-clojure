@@ -88,6 +88,9 @@
 
 (defmethod objc :default [_] nil)
 
+;; TODO: statements
+;; TODO: basic blocks (function definitions, etc.)
+
 ;;;
 ;;; Translating forms to Objective-C
 ;;;
@@ -185,4 +188,5 @@
 (defn codegen
   "Generates a string of Objective-C code from a sequence of Clojure forms."
   [forms]
+  ; TODO: make code generation lazy, so we don't have to keep all the code in memory when outputting to a file
   (s/join "\n" (map #(objc (gen-form %)) forms)))
