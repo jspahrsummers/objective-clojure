@@ -63,6 +63,8 @@
 (defpred number? number?)
 (defpred symbol? symbol?)
 (defpred keyword? keyword?)
+(defpred char? char?)
+(defpred string? string?)
 
 (defn gen-form [form]
   "Generates an Objective-C AST from a Clojure form"
@@ -71,12 +73,33 @@
          [:reader/literal false] [:bool-literal false]
          [:reader/literal (n :when number?)] [:number-literal n]
 
+         ; TODO
+         ;[:reader/literal (c :when char?)]
+
+         ; TODO
+         ;[:reader/literal (s :when string?)]
+
+         ; TODO: emit EXTNil
+         ;[:reader/literal nil]
+
          [:reader/symbol sym] [:identifier sym]
+         
+         ; TODO: create an interned string
+         ;[:reader/keyword sym]
+
+         ; TODO: match special forms
+         ;[:reader/list items]
 
          ;(['. obj sel & args] :seq) (concat
          ;                             ; TODO: support non-literal selectors
          ;                             [:message-expr (gen-form obj) [:selector-literal (str sel)]]
          ;                             (map gen-form args))
+
+         ; TODO: emit NSArray literal
+         ;[:reader/vector items]
+
+         ; TODO: emit NSDictionary literal
+         ;[:reader/map keys values]
 
          _ nil))
 
