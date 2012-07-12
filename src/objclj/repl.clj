@@ -16,7 +16,6 @@
           (if (= input :repl/quit)
             (do
               (println)
-              (flush)
               false)
             (let [ast (parse (str input))]
               (println ast)
