@@ -1,7 +1,9 @@
 (ns objclj.codegen
   (:require [clojure.string :as s])
   (:use [clojure.core.match :only [match]])
+  (:use clojure.test)
   (:require [objclj.reader :as reader])
+  (:use objclj.test)
   (:use objclj.util))
 
 ;;;
@@ -17,25 +19,40 @@
   [c]
   (str "S" (int c)))
 
-(defn sel-parts
-  "Splits a selector into its constituent parts, keeping any colons. Returns a sequence of strings."
-  [sel]
-  (re-seq #"[a-zA-Z0-9_]+\:?" sel))
+(with-test
+  (defn sel-parts
+    "Splits a selector into its constituent parts, keeping any colons. Returns a sequence of strings."
+    [sel]
+    (map second (re-seq #"(:|[a-zA-Z0-9_]+\:?)" sel)))
+  
+  (is= ["foo"] (sel-parts "foo"))
+  (is= ["foo:"] (sel-parts "foo:"))
+  (is= ["foo:" "bar:"] (sel-parts "foo:bar:"))
+  (is= ["foo:" "bar_:" "with9Things:"] (sel-parts "foo:bar_:with9Things:"))
+  (is= ["foo:" ":"] (sel-parts "foo::"))
+  (is= [":"] (sel-parts ":"))
+  (is= [":" ":"] (sel-parts "::")))
 
-(defn method-part
-  "Given remaining selector parts and arguments, returns a string representing the rest of an Objective-C message send. selparts and args should both be sequences of strings."
-  [selparts args]
-  (str
-    (cond (empty? selparts) (str ", " (s/join ", " args))
-          (empty? args) (str " " (first selparts))
-          :else (str " " (first selparts) (first args)))
+(with-test
+  (defn method-part
+    "Given remaining selector parts and arguments, returns a string representing the rest of an Objective-C message send. selparts and args should both be sequences of strings."
+    [selparts args]
+    (str
+      (cond (empty? selparts) (str ", " (s/join ", " args))
+            (empty? args) (str " " (first selparts))
+            :else (str " " (first selparts) (first args)))
 
-    ; If we had both a selector part and an argument this time,
-    (if (and (and (seq selparts) (seq args))
-             ; ... and we have at least one more of either
-             (or (next selparts) (next args)))
-        ; ... recur
-        (method-part (next selparts) (next args)))))
+      ; If we had both a selector part and an argument this time,
+      (if (and (and (seq selparts) (seq args))
+               ; ... and we have at least one more of either
+               (or (next selparts) (next args)))
+          ; ... recur
+          (method-part (next selparts) (next args)))))
+
+  (is= " foo" (method-part ["foo"] []))
+  (is= " foo:5" (method-part ["foo:"] ["5"]))
+  (is= " foo:5 bar:6" (method-part ["foo:" "bar:"] ["5" "6"]))
+  (is= " foo:5, 6, 10" (method-part ["foo:"] ["5" "6" "10"])))
 
 ;; Expressions
 (derive ::void-expr ::expr)
