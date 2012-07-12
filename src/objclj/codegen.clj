@@ -39,10 +39,10 @@
   "NULL")
 
 (defmethod objc :bool-literal [[_ b]]
-  (if b "YES" "NO"))
+  (if b "@YES" "@NO"))
 
 (defmethod objc :number-literal [[_ n]]
-  (str n))
+  (str "@" n))
 
 (defmethod objc :selector-literal [[_ s]]
   (str "@selector(" s ")"))
