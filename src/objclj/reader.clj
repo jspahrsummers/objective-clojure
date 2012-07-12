@@ -8,6 +8,22 @@
   (:use zetta.combinators))
 
 ;;;
+;;; AST structure
+;;;
+
+(def empty-form
+  "An empty Clojure form, which should compile down to nothing."
+  nil)
+
+(defn symbol-form [str]
+  "Returns a vector representing a symbol."
+  [ :reader/symbol str ])
+
+(defn literal-form [x]
+  "Returns a vector representing a literal value."
+  [ :reader/literal x ])
+
+;;;
 ;;; Character classes
 ;;;
 
@@ -26,9 +42,13 @@
   "Parser that matches a regular expression. Returns the matched string."
   `(take-while1 #(re-matches pat %)))
 
+(defmacro always-fn [fn & more]
+  "Parser that does not consume any input, and always returns the result of fn."
+  `(always (~fn ~@more)))
+
 (def line-comment
   "Parser that matches a line comment. Returns nil."
-  (<* (always nil)
+  (<* (always empty-form)
       (char \;)
       (many-till any-token
                  (<|> end-of-input eol))))
@@ -49,26 +69,26 @@
   (<|> sym-start digit))
 
 (def sym
-  (<$> #(symbol (str %1 %2))
+  (<$> #(symbol-form (str %1 %2))
        sym-start
        (<$> str/join (many sym-char))))
 
 (def nil-literal
-  (<* (always nil)
+  (<* (always-fn literal-form nil)
       (string "nil")))
 
 (def true-literal
-  (<* (always true)
+  (<* (always-fn literal-form true)
       (string "true")))
 
 (def false-literal
-  (<* (always false)
+  (<* (always-fn literal-form false)
       (string "false")))
 
-(def parser
+(def form
   (>> skip-whitespaces
       (choice [nil-literal true-literal false-literal sym])))
 
 (defn parse [str]
   "Parses a string of Clojure code into an AST"
-  (-> (parse-once parser str) :result))
+  (-> (parse-once (many form) str) :result))

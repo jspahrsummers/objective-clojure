@@ -1,6 +1,7 @@
 (ns objclj.codegen
   (:use [clojure.core.match :only [match defpred]])
-  (:require [clojure.string :as s]))
+  (:require [clojure.string :as s])
+  (:require [objclj.reader :as reader]))
 
 ;;;
 ;;; Objective-C ASTs and generation
@@ -52,6 +53,8 @@
     (s/join " " (interleave (s/split #":" sel) args))
     "]"))
 
+(defmethod objc nil [_] "")
+
 ;;;
 ;;; Translating forms to Objective-C
 ;;;
@@ -63,11 +66,11 @@
 (defn gen-form [form]
   "Generates an Objective-C AST from a Clojure form"
   (match form
-         true [:bool-literal true]
-         false [:bool-literal false]
-         (n :when number?) [:number-literal n]
+         [:reader/literal true] [:bool-literal true]
+         [:reader/literal false] [:bool-literal false]
+         [:reader/literal (n :when number?)] [:number-literal n]
 
-         (:or (id :when symbol?) (id :when keyword?)) [:identifier (str id)]
+         [:reader/symbol sym] [:identifier sym]
 
          ;(['. obj sel & args] :seq) (concat
          ;                             ; TODO: support non-literal selectors
@@ -80,7 +83,7 @@
 ;;; API
 ;;;
 
-(defn codegen [& forms]
-  "Generates a string of Objective-C code from Clojure forms"
+(defn codegen [forms]
+  "Generates a string of Objective-C code from a sequence of Clojure forms"
   (doall
     (map #(objc (gen-form %)) forms)))

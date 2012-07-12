@@ -19,7 +19,7 @@
           true)
 
         (catch Exception ex
-          (e)
+          (print-cause-trace ex)
           true))
 
       (recur))))
