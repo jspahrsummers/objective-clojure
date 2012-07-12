@@ -112,16 +112,24 @@
 ;;; Clojure-specific parsers
 ;;;
 
-(defn match-escape-seqs
-  "Parser that matches a backslash followed by any key in seqmap. Returns the value associated with the matched key, or the literal escape sequence if no match was found."
-  [seqmap]
-  (*> (char \\)
-      (<$> #(get seqmap % (str \\ %))
-           (oneOf (str (keys seqmap))))))
+(with-test
+  (defn match-escape-seq
+    "Parser that matches a backslash followed by any character key in seqmap. Returns the value associated with the matched key, or the literal escape sequence if no match was found."
+    [seqmap]
+    (*> (char \\)
+        (<$> #(get seqmap % (str \\ %))
+             (oneOf (str (keys seqmap))))))
+
+  (is= ["\n" ""] (parse-str (match-escape-seq {\f "\n", \b "bar"}) "\\f"))
+  (is= ["\n" "\\b"] (parse-str (match-escape-seq {\f "\n", \b "bar"}) "\\f\\b"))
+  (is= ["bar" ""] (parse-str (match-escape-seq {\f "\n", \b "bar"}) "\\b"))
+  (is= [nil "f"] (parse-str (match-escape-seq {\f "\n", \b "bar"}) "f"))
+  (is= ["bar" "ar"] (parse-str (match-escape-seq {\f "\n", \b "bar"}) "\\bar")))
+
 
 (def char-in-string
   "Parser that matches a single character or escape sequence. Returns a string."
-  (<|> (match-escape-seqs { \t "\t"
+  (<|> (match-escape-seq { \t "\t"
                             \b "\b"
                             \n "\n"
                             \r "\r"
