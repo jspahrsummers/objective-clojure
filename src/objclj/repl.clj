@@ -12,12 +12,16 @@
     ;; (recur) can't appear within (try ...), so we have the latter return a boolean value indicating whether we should loop
     (if
       (try
-        ; TODO: handle end-of-line, which should terminate the REPL
-        (let [ast (parse (read-line))]
-          (println ast)
-          (flush)
-          (println (codegen ast))
-          true)
+        (let [input (read-line)]
+          (if (= input nil)
+            (do
+              (println)
+              false)
+            (let [ast (parse input)]
+              (println ast)
+              (flush)
+              (println (codegen ast))
+              true)))
 
         (catch Exception ex
           (print-cause-trace ex)
