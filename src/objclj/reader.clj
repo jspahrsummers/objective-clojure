@@ -13,41 +13,22 @@
 
 (def empty-form
   "An empty Clojure form, which should compile down to nothing."
-  nil)
-
-; TODO: resolve namespaced symbols
-(defn symbol-form
-  "Returns a vector representing a Clojure symbol. sym should be a string."
-  [sym]
-  [ :reader/symbol sym ])
-
-; TODO: resolve double-colon keywords
-(defn keyword-form
-  "Returns a vector representing a Clojure keyword. kwd should be a string and should not include an initial colon."
-  [kwd]
-  [ :reader/keyword kwd ])
-
-(defn literal-form
-  "Returns a vector representing a Clojure literal value. x may be a string, number, character, boolean, or nil. Use keyword-form for keywords."
-  [x]
-  [ :reader/literal x ])
-
-(defn vector-form
-  "Returns a vector representing a Clojure vector. items may be any kind of sequence."
-  [items]
-  [ :reader/vector (vec items) ])
-
-(defn list-form
-  "Returns a vector representing a Clojure list. items may be any kind of sequence."
-  [items]
-  [ :reader/list (vec items) ])
+  ::empty-form)
 
 (defn map-form
-  "Returns a vector representing a Clojure map. pairs should be a sequence of two-item sequences."
+  "Returns a map from a list of pairs. pairs should be a sequence of two-item sequences."
   [pairs]
   (let [keys (map #(nth % 0) pairs)
         vals (map #(nth % 1) pairs)]
-    [ :reader/map (vec keys) (vec vals) ]))
+    (zipmap keys vals)))
+
+(defn strip-empty-forms
+  "Collapses all instances of empty-form from the given sequence of forms (and all their sub-forms)."
+  [forms]
+
+  ; TODO: this could get nasty with too much recursion
+  (let [mapped-forms (map #(if (seq? %) (strip-empty-forms %) %) forms)]
+    (filter #(not (= empty-form %)) mapped-forms)))
 
 ;;;
 ;;; Character classes
@@ -72,11 +53,6 @@
   "Parser that matches a regular expression. Returns the matched string."
   [pat]
   `(take-while1 #(re-matches pat %)))
-
-(defmacro always-fn
-  "Parser that does not consume any input, and always returns the result of invoking fn with the given arguments."
-  [fn & more]
-  `(always (~fn ~@more)))
 
 (defn surrounded-by
   "Parser that matches character l on the left side of p, and character r on the right side. Returns the result of parser p. Automatically skips spaces within the delimiters."
@@ -161,74 +137,71 @@
            (char \:)]))
 
 (def sym
-  "Parser that matches a symbol. Returns a symbol-form."
-  (<$> #(symbol-form (str %1 %2))
+  "Parser that matches a symbol."
+  (<$> #(symbol (str %1 %2))
        sym-start
        (<$> s/join (many sym-char))))
 
 (def kwd
-  "Parser that matches a keyword. Returns a keyword-form."
+  "Parser that matches a keyword.."
   (*> (char \:)
-      (<$> #(keyword-form (s/join %))
+      (<$> #(keyword (s/join %))
            (many sym-char))))
 
 (def nil-literal
-  "Parser that matches literal nil. Returns a literal-form containing nil."
-  (<* (always-fn literal-form nil)
+  "Parser that matches literal nil."
+  (<* (always nil)
       (string "nil")))
 
 (def true-literal
-  "Parser that matches literal true. Returns a literal-form containing true."
-  (<* (always-fn literal-form true)
+  "Parser that matches literal true."
+  (<* (always true)
       (string "true")))
 
 (def false-literal
-  "Parser that matches literal false. Returns a literal-form containing false."
-  (<* (always-fn literal-form false)
+  "Parser that matches literal false."
+  (<* (always false)
       (string "false")))
 
 (def number-literal
-  "Parser that matches a literal number. Returns a literal-form containing the number."
+  "Parser that matches a literal number."
   ; TODO: BigDecimals
   ; TODO: ratios
-  (<$> literal-form number))
+  number)
 
 (def string-literal
-  "Parser that matches a literal string. Returns a literal-form containing the string."
-  (<$> #(literal-form (s/join %))
+  "Parser that matches a literal string."
+  (<$> #(s/join %)
        (around (char \") (many char-in-string))))
 
 (defn special-char-literal
-  "Parser that matches reserved character literal name. Returns ch."
+  "Parser that matches a reserved character literal name. Returns ch."
   [ch name]
-  (<* (always-fn literal-form ch)
+  (<* (always ch)
       (string name)))
 
 ; TODO: this should be a reader macro
 (def char-literal
-  "Parser that matches a literal character. Returns a literal-form containing the character."
+  "Parser that matches a literal character."
   (*> (char \\)
       (choice [(special-char-literal \tab "tab")
                (special-char-literal \space "space")
                (special-char-literal \newline "newline")
-               (<$> literal-form any-token)])))
+               (<$> char any-token)])))
 
 (declare form)
 
 (defn lst []
-  "Parser that matches a list. Returns a list-form."
-  (<$> list-form
-       (parens (many form))))
+  "Parser that matches a list."
+  (<$> list* (parens (many form))))
 
 (defn vector-literal []
-  "Parser that matches a vector. Returns a vector-form."
-  (<$> vector-form
-       (brackets (many form))))
+  "Parser that matches a vector."
+  (<$> vec (brackets (many form))))
 
 (defn map-literal []
-  "Parser that matches a map. Returns a map-form."
-  (<$> map-form
-       (braces (many (replicate 2 form)))))
+  "Parser that matches a map."
+  (<$> map-form (braces (many (replicate 2 form)))))
 
 ;; TODO: implement reader macros:
 ;; ' @ ^ #{} #"" #' #() #_ ` ~ ~@
@@ -243,4 +216,4 @@
 (defn parse
   "Parses a string of Clojure code into an AST. Returns a sequence of forms."
   [str]
-  (-> (parse-once (many form) str) :result))
+  (strip-empty-forms (-> (parse-once (many form) str) :result)))
