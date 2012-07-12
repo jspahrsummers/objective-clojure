@@ -5,7 +5,6 @@ Very experimental at the moment – don't expect much! Contributions are welcome
 # Getting Started
 
     $ sudo curl -0 https://raw.github.com/technomancy/leiningen/preview/bin/lein >> /usr/local/bin/lein && sudo chmod +x /usr/local/bin/lein
-    $ lein git-deps
     $ lein trampoline run
 
 # License
