@@ -163,7 +163,7 @@
                  args (next args)]
              (if (= :reader/keyword seltype)
                  ; TODO: support non-literal selectors
-                 (concat [:message-expr (gen-form obj) [:selector-literal sel]] [(map gen-form args)])))
+                 (concat [:message-expr (gen-form obj) sel] [(map gen-form args)])))
 
          ; TODO
          ;[:reader/list & exprs]
