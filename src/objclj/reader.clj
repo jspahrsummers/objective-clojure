@@ -64,4 +64,4 @@
 
 (defn parse [str]
   "Parses a string of Clojure code into an AST"
-  (parse-once parser str))
+  (-> (parse-once parser str) :result))

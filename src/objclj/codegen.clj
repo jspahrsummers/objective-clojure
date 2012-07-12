@@ -69,10 +69,10 @@
 
          (:or (id :when symbol?) (id :when keyword?)) [:identifier (str id)]
 
-         (['. obj sel & args] :seq) (concat
-                                      ; TODO: support non-literal selectors
-                                      [:message-expr (gen-form obj) [:selector-literal (str sel)]]
-                                      (map gen-form args))
+         ;(['. obj sel & args] :seq) (concat
+         ;                             ; TODO: support non-literal selectors
+         ;                             [:message-expr (gen-form obj) [:selector-literal (str sel)]]
+         ;                             (map gen-form args))
 
          _ nil))
 
