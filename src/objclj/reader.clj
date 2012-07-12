@@ -337,13 +337,19 @@
   ; TODO: is this correct behavior?
   (is= [{} ""] (parse-str (map-literal) "{{}}")))
 
-;; TODO: implement reader macros:
-;; ' @ ^ #{} #"" #' #() #_ ` ~ ~@
+(declare read-table)
+
+; See the definition of read-table for tests
+(defn reader-macro
+  "Parser that matches a reader macro. Expands the matched macro to a single (possibly empty) form."
+  []
+  (choice (vals read-table)))
 
 (def form
   "Parser that matches any Clojure form."
   (>> skip-whitespaces
-      (choice [nil-literal true-literal false-literal number-literal string-literal char-literal
+      (choice [(reader-macro)
+               nil-literal true-literal false-literal number-literal string-literal char-literal
                (lst) (vector-literal) (map-literal)
                kwd sym])))
 
@@ -354,3 +360,27 @@
     (strip-empty-forms (first (parse-str (many form) str))))
   
   (is= [true false] (parse "  true ; foobar\n false")))
+
+;;;
+;;; Reader macros
+;;;
+
+;; TODO: implement reader macros:
+;; @ ^ #{} #"" #' #() ` ~ ~@
+
+(with-test
+  ; TODO: expose this table (and manipulations upon it) to user code
+  (def read-table
+    "A table of reader macros, keyed by a string name which is used only for identification. Each value should be a Zetta parser that returns some kind of Clojure form (including an empty-form)."
+    { "#_" (>> (*> (string "#_") form)
+               (always empty-form))
+
+      "'" (<$> #(list 'quote %)
+               (*> (char \') form))
+    })
+
+  (is= [empty-form ""] (parse-str (reader-macro) "#_ foo"))
+  (is= [empty-form ""] (parse-str (reader-macro) "#_ 5"))
+  (is= [empty-form ""] (parse-str (reader-macro) "#_ (:some :thing)"))
+  (is= ['(quote foo) ""] (parse-str (reader-macro) "'foo"))
+  (is= ['(quote :foo) ""] (parse-str (reader-macro) "':foo")))
