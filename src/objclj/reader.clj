@@ -85,9 +85,15 @@
   (<* (always-fn literal-form false)
       (string "false")))
 
+(def number-literal
+  ; TODO: BigDecimals
+  ; TODO: ratios
+  (<$> literal-form number))
+
 (def form
   (>> skip-whitespaces
-      (choice [nil-literal true-literal false-literal sym])))
+      (choice [nil-literal true-literal false-literal number-literal
+               sym])))
 
 (defn parse [str]
   "Parses a string of Clojure code into an AST"
