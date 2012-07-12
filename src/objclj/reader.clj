@@ -1,7 +1,7 @@
 (ns objclj.reader
   ; Zetta defines some symbols that conflict with builtins
   (:refer-clojure :exclude [char take-while replicate take])
-  (:require [clojure.string :as str])
+  (:require [clojure.string :as s])
   (:use clojure.algo.monads)
   (:use [zetta.core :exclude [parse]])
   (:use [zetta.parser.seq :exclude [get ensure whitespace skip-whitespaces]])
@@ -142,11 +142,11 @@
 (def sym
   (<$> #(symbol-form (str %1 %2))
        sym-start
-       (<$> str/join (many sym-char))))
+       (<$> s/join (many sym-char))))
 
 (def kwd
   (*> (char \:)
-      (<$> #(keyword-form (str/join %))
+      (<$> #(keyword-form (s/join %))
            (take-while1 #(not (whitespace? %))))))
 
 (def nil-literal
@@ -167,7 +167,7 @@
   (<$> literal-form number))
 
 (def string-literal
-  (<$> #(literal-form (str/join %))
+  (<$> #(literal-form (s/join %))
        (around (char \") (many char-in-string))))
 
 (defn special-char-literal [ch name]
