@@ -383,6 +383,10 @@
       "^" (<$> #(with-meta %2 (if (map? %1) %1 { :tag %1 }))
                (*> (char \^) form)
                form)
+
+      "#{}" (<$> #(list 'set %)
+                 (*> (char \#)
+                     (surrounded-by (many form) \{ \})))
     })
 
   (is= [empty-form ""] (parse-str (reader-macro) "#_ foo"))
@@ -393,3 +397,4 @@
   (is= ['(deref foo) ""] (parse-str (reader-macro) "@foo"))
   (is= [^{:tag :foo} [1 2 3] ""] (parse-str (reader-macro) "^:foo [1 2 3]"))
   (is= [^{:foo :bar} [1 2 3] ""] (parse-str (reader-macro) "^{:foo :bar} [1 2 3]")))
+  (is= [(list 'set [1 2 3]) ""] (parse-str (reader-macro) "#{ 1 2 3}"))
