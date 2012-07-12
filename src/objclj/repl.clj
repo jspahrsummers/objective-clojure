@@ -15,6 +15,7 @@
         ; TODO: handle end-of-line, which should terminate the REPL
         (let [ast (parse (read-line))]
           (println ast)
+          (flush)
           (println (codegen ast))
           true)
 

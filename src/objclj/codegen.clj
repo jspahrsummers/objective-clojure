@@ -53,7 +53,8 @@
     (s/join " " (interleave (s/split #":" sel) args))
     "]"))
 
-(defmethod objc nil [_] "")
+(defmethod objc nil [_]
+  "")
 
 ;;;
 ;;; Translating forms to Objective-C

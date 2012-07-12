@@ -1,11 +1,11 @@
 (ns objclj.reader
   ; Zetta defines many symbols that conflict with builtins
-  (:refer-clojure :exclude [ensure, get, char, take-while, take, replicate])
+  (:refer-clojure :exclude [char take-while take])
   (:require [clojure.string :as str])
   (:use clojure.algo.monads)
   (:use [zetta.core :exclude [parse]])
-  (:use [zetta.parser.seq :exclude [whitespace, skip-whitespaces]])
-  (:use zetta.combinators))
+  (:use [zetta.parser.seq :exclude [get ensure whitespace skip-whitespaces]])
+  (:use [zetta.combinators :exclude [replicate]]))
 
 ;;;
 ;;; AST structure
@@ -34,9 +34,9 @@
 ;;; Parsers
 ;;;
 
-(defn oneOf [str]
+(defn oneOf [s]
   "Parser that matches any one character in the given string."
-  (char (set str)))
+  (char (set s)))
 
 (defmacro regex [pat]
   "Parser that matches a regular expression. Returns the matched string."
@@ -45,6 +45,29 @@
 (defmacro always-fn [fn & more]
   "Parser that does not consume any input, and always returns the result of fn."
   `(always (~fn ~@more)))
+
+(defmacro match-escape-seq [seq rep]
+  "Parser that matches a backslash followed by seq. Returns rep."
+  `(<* (always ~rep)
+       (string (str \\ ~seq))))
+
+(defn match-escape-seqs [seqmap]
+  "Parser that matches a backslash followed by any key in seqmap. Returns the value associated with the matched key, or the literal escape sequence if no match was found."
+  (*> (char \\)
+      (<$> #(get seqmap % (str \\ %))
+           (oneOf (str (keys seqmap))))))
+
+(def char-in-string
+  "Parser that matches a single character or escape sequence. Returns a string."
+  (<|> (match-escape-seqs { \t "\t"
+                            \b "\b"
+                            \n "\n"
+                            \r "\r"
+                            \f "\f"
+                            \' "'"
+                            \" "\""
+                            \\ "\\" })
+       (<$> str (not-char \"))))
 
 (def line-comment
   "Parser that matches a line comment. Returns nil."
@@ -90,9 +113,13 @@
   ; TODO: ratios
   (<$> literal-form number))
 
+(def string-literal
+  (<$> #(literal-form (str/join %))
+       (around (char \") (many char-in-string))))
+
 (def form
   (>> skip-whitespaces
-      (choice [nil-literal true-literal false-literal number-literal
+      (choice [nil-literal true-literal false-literal number-literal string-literal
                sym])))
 
 (defn parse [str]
