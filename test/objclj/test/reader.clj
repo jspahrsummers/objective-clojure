@@ -9,6 +9,16 @@
   [p s]
   (-> (parse-once p s) :result))
 
+(deftest test-strip-empty-forms
+  (is= (list) (strip-empty-forms (list empty-form)))
+  (is= (list) (strip-empty-forms (list empty-form empty-form)))
+  (is= (list '()) (strip-empty-forms (list empty-form (list empty-form))))
+  (is= (list []) (strip-empty-forms (list empty-form [empty-form])))
+  (is= (list #{}) (strip-empty-forms (list empty-form #{ empty-form }))))
+
+  ; TODO: make strip-empty-forms work on maps too
+  ; (is= (list {}) (strip-empty-forms (list empty-form { empty-form empty-form, :a empty-form, empty-form :b }))))
+
 (deftest test-line-comment
   (is= empty-form (parse-str whitespace "; foobar"))
   (is-not= empty-form (parse-str whitespace "; foobar\r\nfoobar")))
