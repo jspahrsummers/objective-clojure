@@ -194,6 +194,9 @@
   (<$> map-form
        (braces (many (replicate 2 form)))))
 
+;; TODO: implement reader macros:
+;; ' @ ^ #{} #"" #' #() #_ ` ~ ~@
+
 (def form
   (>> skip-whitespaces
       (choice [nil-literal true-literal false-literal number-literal string-literal char-literal
