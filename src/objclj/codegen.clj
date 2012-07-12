@@ -15,7 +15,7 @@
   "Escapes a single character, to create part of a valid Objective-C identifier."
   (str "S" (int c)))
 
-(defn sel-parts [[_ sel]]
+(defn sel-parts [sel]
   "Splits a selector into its constituent parts, keeping any colons. Returns a sequence of strings."
   (re-seq #"[a-zA-Z0-9_]+\:?" sel))
 
@@ -25,9 +25,12 @@
 (derive ::null-literal ::expr)
 (derive ::bool-literal ::expr)
 (derive ::number-literal ::expr)
+(derive ::character-literal ::expr)
+(derive ::nsstring-literal ::expr)
 (derive ::selector-literal ::expr)
 (derive ::identifier ::expr)
 (derive ::message-expr ::expr)
+(derive ::nsarray-literal ::expr)
 
 (defmethod objc :void-expr [_]
   "((void)0)")
@@ -39,10 +42,16 @@
   "NULL")
 
 (defmethod objc :bool-literal [[_ b]]
-  (if b "YES" "NO"))
+  (if b "@YES" "@NO"))
 
 (defmethod objc :number-literal [[_ n]]
-  (str n))
+  (str "@" n))
+
+(defmethod objc :character-literal [[_ c]]
+  (str "@'" c "'"))
+
+(defmethod objc :nsstring-literal [[_ s]]
+  (str "@\"" s \"""))
 
 (defmethod objc :selector-literal [[_ s]]
   (str "@selector(" s ")"))
@@ -72,6 +81,9 @@
                     (map objc args))
        "]"))
 
+(defmethod objc :nsarray-literal [[_ items]]
+  (objc [:message-expr [:identifier "NSArray"] "arrayWithObjects:" (concat items (list [:nil-literal]))]))
+
 (defmethod objc nil [_]
   "")
 
@@ -92,11 +104,9 @@
          [:reader/literal false] [:bool-literal false]
          [:reader/literal (n :when number?)] [:number-literal n]
 
-         ; TODO
-         ;[:reader/literal (c :when char?)]
+         [:reader/literal (c :when char?)] [:character-literal c]
 
-         ; TODO
-         ;[:reader/literal (s :when string?)]
+         [:reader/literal (s :when string?)] [:nsstring-literal s]
 
          ; TODO: emit EXTNil
          ;[:reader/literal nil]
@@ -153,14 +163,12 @@
                  args (next args)]
              (if (= :reader/keyword seltype)
                  ; TODO: support non-literal selectors
-                 (concat [:message-expr (gen-form obj) [:selector-literal sel]] [(map gen-form args)])))
+                 (concat [:message-expr (gen-form obj) sel] [(map gen-form args)])))
 
          ; TODO
          ;[:reader/list & exprs]
 
-
-         ; TODO: emit NSArray literal
-         ;[:reader/vector items]
+         [:reader/vector items] [:nsarray-literal (map gen-form items)]
 
          ; TODO: emit NSDictionary literal
          ;[:reader/map keys values]
