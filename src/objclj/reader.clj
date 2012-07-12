@@ -22,6 +22,14 @@
         vals (map #(nth % 1) pairs)]
     (zipmap keys vals)))
 
+(defn strip-empty-forms
+  "Collapses all instances of empty-form from the given sequence of forms (and all their sub-forms)."
+  [forms]
+
+  ; TODO: this could get nasty with too much recursion
+  (let [mapped-forms (map #(if (seq? %) (strip-empty-forms %) %) forms)]
+    (filter #(not (= empty-form %)) mapped-forms)))
+
 ;;;
 ;;; Character classes
 ;;;
@@ -208,4 +216,4 @@
 (defn parse
   "Parses a string of Clojure code into an AST. Returns a sequence of forms."
   [str]
-  (-> (parse-once (many form) str) :result))
+  (strip-empty-forms (-> (parse-once (many form) str) :result)))
