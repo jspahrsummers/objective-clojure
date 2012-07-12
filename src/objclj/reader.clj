@@ -3,9 +3,17 @@
   (:refer-clojure :exclude [char take-while replicate take])
   (:require [clojure.string :as s])
   (:use clojure.algo.monads)
+  (:use clojure.test)
+  (:use objclj.test)
   (:use [zetta.core :exclude [parse]])
   (:use [zetta.parser.seq :exclude [get ensure whitespace skip-whitespaces]])
   (:use zetta.combinators))
+
+(defn parse-str
+  "Runs parser p on string s and returns a two-item vector containing the result and any unparsed part of the string."
+  [p s]
+  (let [result (parse-once p s)]
+    [(-> result :result) (s/join (-> result :remainder))]))
 
 ;;;
 ;;; AST structure
@@ -22,13 +30,21 @@
         vals (map #(nth % 1) pairs)]
     (zipmap keys vals)))
 
-(defn strip-empty-forms
-  "Collapses all instances of empty-form from the given sequence of forms (and all their sub-forms)."
-  [forms]
+(with-test
+  ; TODO: this doesn't work on maps right now
+  (defn strip-empty-forms
+    "Collapses all instances of empty-form from the given sequence of forms (and all their sub-forms)."
+    [forms]
 
-  ; TODO: this could get nasty with too much recursion
-  (let [mapped-forms (map #(if (seq? %) (strip-empty-forms %) %) forms)]
-    (filter #(not (= empty-form %)) mapped-forms)))
+    ; TODO: this could get nasty with too much recursion
+    (let [mapped-forms (map #(if (seq? %) (strip-empty-forms %) %) forms)]
+      (filter #(not (= empty-form %)) mapped-forms)))
+
+  (is= (list) (strip-empty-forms (list empty-form)))
+  (is= (list) (strip-empty-forms (list empty-form empty-form)))
+  (is= (list '()) (strip-empty-forms (list empty-form (list empty-form))))
+  (is= (list []) (strip-empty-forms (list empty-form [empty-form])))
+  (is= (list #{}) (strip-empty-forms (list empty-form #{ empty-form }))))
 
 ;;;
 ;;; Character classes
@@ -105,22 +121,37 @@
                             \\ "\\" })
        (<$> str (not-char \"))))
 
-; TODO: this should be a reader macro
-(def line-comment
-  "Parser that matches a line comment. Returns empty-form."
-  (<* (always empty-form)
-      (char \;)
-      (many-till any-token
-                 (<|> end-of-input eol))))
+(with-test
+  ; TODO: this should be a reader macro
+  (def line-comment
+    "Parser that matches a line comment. Returns empty-form."
+    (<* (always empty-form)
+        (char \;)
+        (many-till any-token
+                   (<|> end-of-input eol))))
 
-(def whitespace
-  "Parser that matches whitespace and comments. Returns empty-form."
-  (<* (always empty-form)
-      (<|> (satisfy? whitespace?) line-comment)))
+  (is= [empty-form ""] (parse-str line-comment "; foobar"))
+  (is= [empty-form "foobar"] (parse-str line-comment "; foobar\r\nfoobar")))
 
-(def skip-whitespaces
-  "Skips whitespace and comments."
-  (skip-many whitespace))
+(with-test
+  (def whitespace
+    "Parser that matches whitespace and comments. Returns empty-form."
+    (<* (always empty-form)
+        (<|> (satisfy? whitespace?) line-comment)))
+
+  (is= [empty-form ""] (parse-str whitespace " "))
+  (is= [empty-form ""] (parse-str whitespace "\t"))
+  (is= [empty-form ""] (parse-str whitespace "\n"))
+  (is= [empty-form ""] (parse-str whitespace "\r")))
+
+(with-test
+  (def skip-whitespaces
+    "Skips whitespace and comments. Returns empty-form."
+    (<* (always empty-form)
+        (skip-many whitespace)))
+
+  (is= [empty-form ""] (parse-str skip-whitespaces "   \n\t\r ; foo\n    "))
+  (is= [empty-form "foo\n"] (parse-str skip-whitespaces "   \n\t\r foo\n")))
 
 (def sym-special-char
   "Parser that matches any non-alphanumeric character that is allowed in a symbol. Returns the matched character."
@@ -216,4 +247,4 @@
 (defn parse
   "Parses a string of Clojure code into an AST. Returns a sequence of forms."
   [str]
-  (strip-empty-forms (-> (parse-once (many form) str) :result)))
+  (strip-empty-forms (parse-str (many form) str)))

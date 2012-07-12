@@ -1,4 +1,4 @@
-(ns objclj.test.assertions
+(ns objclj.test
   (:use clojure.test))
 
 (defmacro is=
