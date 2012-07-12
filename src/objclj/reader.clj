@@ -117,9 +117,21 @@
   (<$> #(literal-form (str/join %))
        (around (char \") (many char-in-string))))
 
+(defn special-char-literal [ch name]
+  "Parser that matches the name of a special character literal. Returns ch."
+  (<* (always-fn literal-form ch)
+      (string name)))
+
+(def char-literal
+  (*> (char \\)
+      (choice [(special-char-literal \tab "tab")
+               (special-char-literal \space "space")
+               (special-char-literal \newline "newline")
+               (<$> literal-form any-token)])))
+
 (def form
   (>> skip-whitespaces
-      (choice [nil-literal true-literal false-literal number-literal string-literal
+      (choice [nil-literal true-literal false-literal number-literal string-literal char-literal
                sym])))
 
 (defn parse [str]
