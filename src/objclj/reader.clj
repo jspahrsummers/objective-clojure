@@ -15,10 +15,12 @@
   "An empty Clojure form, which should compile down to nothing."
   nil)
 
+; TODO: resolve namespaced symbols
 (defn symbol-form [sym]
   "Returns a vector representing a symbol. sym should be a string."
   [ :reader/symbol sym ])
 
+; TODO: resolve double-colon keywords
 (defn keyword-form [kwd]
   "Returns a vector representing a keyword. kwd should be a string and should not include an initial colon."
   [ :reader/keyword kwd ])
@@ -26,10 +28,6 @@
 (defn literal-form [x]
   "Returns a vector representing a literal value. x may be a string, number, character, boolean, or nil. (Use keyword-form for keywords.)"
   [ :reader/literal x ])
-
-(defn set-form [items]
-  "Returns a vector representing a set. items may be any kind of sequence."
-  [ :reader/set items ])
 
 (defn vector-form [items]
   "Returns a vector representing a vector. items may be any kind of sequence."
