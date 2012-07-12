@@ -18,12 +18,6 @@
 ;;; Parsers
 ;;;
 
-(def whitespace
-  (satisfy? whitespace?))
-
-(def skip-whitespaces
-  (skip-many whitespace))
-
 (defn oneOf [str]
   "Parser that matches any one character in the given string."
   (char (set str)))
@@ -31,6 +25,19 @@
 (defmacro regex [pat]
   "Parser that matches a regular expression. Returns the matched string."
   `(take-while1 #(re-matches pat %)))
+
+(def line-comment
+  "Parser that matches a line comment. Returns nil."
+  (<* (always nil)
+      (char \;)
+      (many-till any-token
+                 (<|> end-of-input eol))))
+
+(def whitespace
+  (<|> (satisfy? whitespace?) line-comment))
+
+(def skip-whitespaces
+  (skip-many whitespace))
 
 (def sym-special-char
   (oneOf "*+!-_?/.%:&"))
