@@ -15,7 +15,7 @@
   "Escapes a single character, to create part of a valid Objective-C identifier."
   (str "S" (int c)))
 
-(defn sel-parts [[_ sel]]
+(defn sel-parts [sel]
   "Splits a selector into its constituent parts, keeping any colons. Returns a sequence of strings."
   (re-seq #"[a-zA-Z0-9_]+\:?" sel))
 
