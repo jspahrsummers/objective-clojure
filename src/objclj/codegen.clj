@@ -26,11 +26,11 @@
 (derive ::bool-literal ::expr)
 (derive ::number-literal ::expr)
 (derive ::character-literal ::expr)
-(derive ::string-literal ::expr)
+(derive ::nsstring-literal ::expr)
 (derive ::selector-literal ::expr)
 (derive ::identifier ::expr)
 (derive ::message-expr ::expr)
-(derive ::array-literal ::expr)
+(derive ::nsarray-literal ::expr)
 
 (defmethod objc :void-expr [_]
   "((void)0)")
@@ -50,7 +50,7 @@
 (defmethod objc :character-literal [[_ c]]
   (str "@'" c "'"))
 
-(defmethod objc :string-literal [[_ s]]
+(defmethod objc :nsstring-literal [[_ s]]
   (str "@\"" s \"""))
 
 (defmethod objc :selector-literal [[_ s]]
@@ -81,7 +81,7 @@
                     (map objc args))
        "]"))
 
-(defmethod objc :array-literal [[_ items]]
+(defmethod objc :nsarray-literal [[_ items]]
   (objc [:message-expr [:identifier "NSArray"] "arrayWithObjects:" (concat items (list [:nil-literal]))]))
 
 (defmethod objc nil [_]
@@ -106,7 +106,7 @@
 
          [:reader/literal (c :when char?)] [:character-literal c]
 
-         [:reader/literal (s :when string?)] [:string-literal s]
+         [:reader/literal (s :when string?)] [:nsstring-literal s]
 
          ; TODO: emit EXTNil
          ;[:reader/literal nil]
@@ -168,7 +168,7 @@
          ; TODO
          ;[:reader/list & exprs]
 
-         [:reader/vector items] [:array-literal (map gen-form items)]
+         [:reader/vector items] [:nsarray-literal (map gen-form items)]
 
          ; TODO: emit NSDictionary literal
          ;[:reader/map keys values]
