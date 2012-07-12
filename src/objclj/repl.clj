@@ -4,30 +4,37 @@
   (:use [objclj.codegen :only [codegen]])
   (:use [objclj.reader :only [parse]]))
 
-(defn -main [& args]
-  (loop []
-    (print "=> ")
-    (flush)
+(defn rep-line
+  "Reads, evaluates, and prints a single line from stdin. Returns whether the REPL should continue."
+  []
+  (let [input (read-line)]
+    (if (= input nil)
+      ; User sent EOF/EOT, so exit gracefully
+      (do
+        (println)
+        false)
 
-    ;; (recur) can't appear within (try ...), so we have the latter return a boolean value indicating whether we should loop
-    (if
       (try
-        (let [input (read-line)]
-          (if (= input nil)
-            (do
-              (println)
-              false)
-            (let [ast (parse input)]
-              (println ast)
-              (flush)
+        (let [ast (parse input)]
+          (println ast)
 
-              ; TODO: generate code for main()
-              ; TODO: invoke Clang
-              (println (codegen ast))
-              true)))
+          ; TODO: generate code for main()
+          ; TODO: invoke Clang
+          (println (codegen ast))
+          true)
 
+        ; Log any exceptions thrown during parsing or code generation and continue
         (catch Exception ex
           (print-cause-trace ex)
-          true))
+          true)))))
 
-      (recur))))
+(defn repl
+  "Main REPL loop."
+  []
+  (print "=> ")
+  (flush)
+
+  (if (rep-line) (recur)))
+
+(defn -main [& args]
+  (repl))
