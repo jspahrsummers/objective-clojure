@@ -145,7 +145,7 @@
 (def kwd
   (*> (char \:)
       (<$> #(keyword-form (s/join %))
-           (take-while1 #(not (whitespace? %))))))
+           (many sym-char))))
 
 (def nil-literal
   (<* (always-fn literal-form nil)
