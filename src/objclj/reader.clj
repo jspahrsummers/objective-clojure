@@ -129,6 +129,7 @@
                             \\ "\\" })
        (<$> str (not-char \"))))
 
+; TODO: this should be a reader macro
 (def line-comment
   "Parser that matches a line comment. Returns empty-form."
   (<* (always empty-form)
@@ -203,6 +204,7 @@
   (<* (always-fn literal-form ch)
       (string name)))
 
+; TODO: this should be a reader macro
 (def char-literal
   "Parser that matches a literal character. Returns a literal-form containing the character."
   (*> (char \\)
