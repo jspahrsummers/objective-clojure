@@ -31,17 +31,17 @@
 
 (defn vector-form [items]
   "Returns a vector representing a vector. items may be any kind of sequence."
-  [ :reader/vector items ])
+  [ :reader/vector (vec items) ])
 
 (defn list-form [items]
   "Returns a vector representing a list. items may be any kind of sequence."
-  [ :reader/list items ])
+  [ :reader/list (vec items) ])
 
 (defn map-form [pairs]
   "Returns a vector representing a map. pairs may be any kind of sequence."
   (let [keys (map #(nth % 0) pairs)
         vals (map #(nth % 1) pairs)]
-    [ :reader/map keys vals ]))
+    [ :reader/map (vec keys) (vec vals) ]))
 
 ;;;
 ;;; Character classes
