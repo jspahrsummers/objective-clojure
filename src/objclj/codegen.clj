@@ -8,12 +8,16 @@
 ;;;
 
 (defmulti objc
-  "Translates an Objective-C AST into a string of Objective-C code"
+  "Translates an Objective-C AST into a string of Objective-C code."
   #(first %))
 
 (defn escape [c]
-  "Escapes a single character, to create part of a valid Objective-C identifier"
+  "Escapes a single character, to create part of a valid Objective-C identifier."
   (str "S" (int c)))
+
+(defn sel-parts [[_ sel]]
+  "Splits a selector into its constituent parts, keeping any colons. Returns a sequence of strings."
+  (re-seq #"[a-zA-Z0-9_]+\:?" sel))
 
 ;; Expressions
 (derive ::void-expr ::expr)
@@ -47,11 +51,26 @@
   ; TODO: do we need to escape initial digits?
   (s/replace id #"[^a-zA-Z0-9_]" (comp escape char)))
 
-(defmethod objc :message-expr [[_ obj [[_ sel]] & args]]
+(defn method-part [selparts args]
+  "Given remaining selector parts and arguments, generates the rest of an Objective-C message send."
+  (str
+    (cond (empty? selparts) (str ", " (s/join ", " args))
+          (empty? args) (str " " (first selparts))
+          :else (str " " (first selparts) (first args)))
+    ; If we had both a selector part and an argument this time,
+    (if (and (and (seq selparts) (seq args))
+             ; ... and we have at least one more of either
+             (or (next selparts) (next args)))
+
+        ; recur
+        (method-part (next selparts) (next args)))))
+
+(defmethod objc :message-expr [[_ obj sel args]]
   (str "["
-    (objc obj) " "
-    (s/join " " (interleave (s/split #":" sel) args))
-    "]"))
+       (objc obj)
+       (method-part (sel-parts sel)
+                    (map objc args))
+       "]"))
 
 (defmethod objc nil [_]
   "")
@@ -129,11 +148,12 @@
          ; TODO
          ;[:reader/list [[:reader/symbol "monitor-exit"] x]]
 
-         ; TODO
-         ;[:reader/list [[:reader/symbol "."] obj sel & args]]
-         ;                             ; TODO: support non-literal selectors
-         ;                             [:message-expr (gen-form obj) [:selector-literal (str sel)]]
-         ;                             (map gen-form args))
+         [:reader/list [[:reader/symbol "."] obj & args]]
+           (let [[seltype sel] (first args)
+                 args (next args)]
+             (if (= :reader/keyword seltype)
+                 ; TODO: support non-literal selectors
+                 (concat [:message-expr (gen-form obj) [:selector-literal sel]] [(map gen-form args)])))
 
          ; TODO
          ;[:reader/list & exprs]
