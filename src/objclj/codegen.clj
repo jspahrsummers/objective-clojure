@@ -8,11 +8,11 @@
 ;;;
 
 (defmulti objc
-  "Translates an Objective-C AST into a string of Objective-C code."
+  "Translates an Objective-C element into a string of Objective-C code."
   #(first %))
 
 (defn escape
-  "Escapes a single character, to create part of a valid Objective-C identifier."
+  "Escapes a single character, to create part of a valid Objective-C identifier. Returns a string."
   [c]
   (str "S" (int c)))
 
@@ -20,6 +20,21 @@
   "Splits a selector into its constituent parts, keeping any colons. Returns a sequence of strings."
   [sel]
   (re-seq #"[a-zA-Z0-9_]+\:?" sel))
+
+(defn method-part
+  "Given remaining selector parts and arguments, returns a string representing the rest of an Objective-C message send. selparts and args should both be sequences of strings."
+  [selparts args]
+  (str
+    (cond (empty? selparts) (str ", " (s/join ", " args))
+          (empty? args) (str " " (first selparts))
+          :else (str " " (first selparts) (first args)))
+    ; If we had both a selector part and an argument this time,
+    (if (and (and (seq selparts) (seq args))
+             ; ... and we have at least one more of either
+             (or (next selparts) (next args)))
+
+        ; ... recur
+        (method-part (next selparts) (next args)))))
 
 ;; Expressions
 (derive ::void-expr ::expr)
@@ -59,23 +74,7 @@
   (str "@selector(" s ")"))
 
 (defmethod objc :identifier [[_ id]]
-  ; TODO: do we need to escape initial digits?
   (s/replace id #"[^a-zA-Z0-9_]" (comp escape char)))
-
-(defn method-part
-  "Given remaining selector parts and arguments, generates the rest of an Objective-C message send."
-  [selparts args]
-  (str
-    (cond (empty? selparts) (str ", " (s/join ", " args))
-          (empty? args) (str " " (first selparts))
-          :else (str " " (first selparts) (first args)))
-    ; If we had both a selector part and an argument this time,
-    (if (and (and (seq selparts) (seq args))
-             ; ... and we have at least one more of either
-             (or (next selparts) (next args)))
-
-        ; recur
-        (method-part (next selparts) (next args)))))
 
 (defmethod objc :message-expr [[_ obj sel args]]
   (str "["
@@ -87,13 +86,13 @@
 (defmethod objc :nsarray-literal [[_ items]]
   (objc [:message-expr [:identifier "NSArray"] "arrayWithObjects:" (concat items (list [:nil-literal]))]))
 
-(defmethod objc nil [_]
-  "")
+(defmethod objc :default [_] nil)
 
 ;;;
 ;;; Translating forms to Objective-C
 ;;;
 
+;; Predicates for core.match
 (defpred number? number?)
 (defpred symbol? symbol?)
 (defpred keyword? keyword?)
@@ -101,7 +100,7 @@
 (defpred string? string?)
 
 (defn gen-form
-  "Generates an Objective-C AST from a Clojure form"
+  "Generates and returns an Objective-C element from a Clojure form. The returned value is suitable for later being passed to the objc function."
   [form]
   (match form
          [:reader/literal true] [:bool-literal true]
@@ -184,7 +183,6 @@
 ;;;
 
 (defn codegen
-  "Generates a string of Objective-C code from a sequence of Clojure forms"
+  "Generates a string of Objective-C code from a sequence of Clojure forms."
   [forms]
-  (doall
-    (map #(objc (gen-form %)) forms)))
+  (s/join "\n" (map #(objc (gen-form %)) forms)))
