@@ -18,7 +18,7 @@
             (do
               (println)
               false)
-            (let [ast (parse (read-line))]
+            (let [ast (parse input)]
               (println ast)
               (flush)
               (println (codegen ast))
