@@ -1,7 +1,8 @@
 (ns objclj.codegen
   (:use [clojure.core.match :only [match defpred]])
   (:require [clojure.string :as s])
-  (:require [objclj.reader :as reader]))
+  (:require [objclj.reader :as reader])
+  (:use objclj.util))
 
 ;;;
 ;;; Objective-C ASTs and generation
@@ -28,11 +29,11 @@
     (cond (empty? selparts) (str ", " (s/join ", " args))
           (empty? args) (str " " (first selparts))
           :else (str " " (first selparts) (first args)))
+
     ; If we had both a selector part and an argument this time,
     (if (and (and (seq selparts) (seq args))
              ; ... and we have at least one more of either
              (or (next selparts) (next args)))
-
         ; ... recur
         (method-part (next selparts) (next args)))))
 
@@ -65,10 +66,11 @@
   (str "@" n))
 
 (defmethod objc :character-literal [[_ c]]
+  ; TODO: should this just be an NSString? (right now, it'll be an NSNumber)
   (str "@'" c "'"))
 
 (defmethod objc :nsstring-literal [[_ s]]
-  (str "@\"" s \"""))
+  (str "@\"" s "\""))
 
 (defmethod objc :selector-literal [[_ s]]
   (str "@selector(" s ")"))
@@ -84,7 +86,9 @@
        "]"))
 
 (defmethod objc :nsarray-literal [[_ items]]
-  (objc [:message-expr [:identifier "NSArray"] "arrayWithObjects:" (concat items (list [:nil-literal]))]))
+  (objc [:message-expr [:identifier "NSArray"]
+                       "arrayWithObjects:"
+                       (append items [:nil-literal])]))
 
 (defmethod objc :default [_] nil)
 
@@ -169,7 +173,7 @@
                  args (next args)]
              (if (= :reader/keyword seltype)
                  ; TODO: support non-literal selectors
-                 (concat [:message-expr (gen-form obj) sel] [(map gen-form args)])))
+                 (append [:message-expr (gen-form obj) sel] (map gen-form args))))
 
          ; TODO
          ;[:reader/list & exprs]
