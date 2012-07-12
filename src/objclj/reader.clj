@@ -112,12 +112,6 @@
 ;;; Clojure-specific parsers
 ;;;
 
-(defmacro match-escape-seq
-  "Parser that matches a backslash followed by seq. Returns rep."
-  [seq rep]
-  `(<* (always ~rep)
-       (string (str \\ ~seq))))
-
 (defn match-escape-seqs
   "Parser that matches a backslash followed by any key in seqmap. Returns the value associated with the matched key, or the literal escape sequence if no match was found."
   [seqmap]
