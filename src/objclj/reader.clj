@@ -366,7 +366,7 @@
 ;;;
 
 ;; TODO: implement reader macros:
-;; #{} #"" #' #() ` ~ ~@
+;; #"" #() ` ~ ~@
 
 (with-test
   ; TODO: expose this table (and manipulations upon it) to user code
@@ -385,8 +385,12 @@
                form)
 
       "#{}" (<$> #(list 'set %)
-                 (*> (char \#)
-                     (surrounded-by (many form) \{ \})))
+                 (*> (string "#{")
+                     (<* (many form)
+                         (char \}))))
+
+      "#'" (<$> #(list 'var %)
+                (*> (string "#'") form))
     })
 
   (is= [empty-form ""] (parse-str (reader-macro) "#_ foo"))
@@ -396,5 +400,6 @@
   (is= ['(quote :foo) ""] (parse-str (reader-macro) "':foo"))
   (is= ['(deref foo) ""] (parse-str (reader-macro) "@foo"))
   (is= [^{:tag :foo} [1 2 3] ""] (parse-str (reader-macro) "^:foo [1 2 3]"))
-  (is= [^{:foo :bar} [1 2 3] ""] (parse-str (reader-macro) "^{:foo :bar} [1 2 3]")))
-  (is= [(list 'set [1 2 3]) ""] (parse-str (reader-macro) "#{ 1 2 3}"))
+  (is= [^{:foo :bar} [1 2 3] ""] (parse-str (reader-macro) "^{:foo :bar} [1 2 3]"))
+  (is= [(list 'set [1 2 3]) ""] (parse-str (reader-macro) "#{ 1 2 3 }"))
+  (is= [(list 'var 'foo) ""] (parse-str (reader-macro) "#'foo")))
