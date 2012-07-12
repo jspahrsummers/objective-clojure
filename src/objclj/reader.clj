@@ -1,6 +1,6 @@
 (ns objclj.reader
   ; Zetta defines some symbols that conflict with builtins
-  (:refer-clojure :exclude [char take-while replicate take])
+  (:refer-clojure :rename { char to-char } :exclude [take-while replicate take])
   (:require [clojure.string :as s])
   (:use clojure.algo.monads)
   (:use clojure.test)
@@ -23,12 +23,17 @@
   "An empty Clojure form, which should compile down to nothing."
   ::empty-form)
 
-(defn map-form
-  "Returns a map from a list of pairs. pairs should be a sequence of two-item sequences."
-  [pairs]
-  (let [keys (map #(nth % 0) pairs)
-        vals (map #(nth % 1) pairs)]
-    (zipmap keys vals)))
+(with-test
+  (defn map-form
+    "Returns a map from a sequence of pairs. pairs should be a sequence of two-item collections."
+    [pairs]
+    (let [keys (map #(nth % 0) pairs)
+          vals (map #(nth % 1) pairs)]
+      (zipmap keys vals)))
+
+  (is= {} (map-form []))
+  (is= { :foo :bar } (map-form [[:foo :bar]]))
+  (is= { :foo :bar, :a :b } (map-form [[:foo :bar] [:a :b]])))
 
 (defmulti strip-empty-forms
   "Collapses all instances of empty-form from the given collection of forms (and all their sub-forms)."
@@ -71,9 +76,16 @@
 ;;; Character classes
 ;;;
 
-(defn whitespace? [c]
-  "Tests whether a character is considered whitespace in Clojure."
-  (or (= c \,) (Character/isWhitespace #^java.lang.Character c)))
+(with-test
+  (defn whitespace? [c]
+    "Tests whether a character is considered whitespace in Clojure."
+    (or (= c \,) (Character/isWhitespace #^java.lang.Character c)))
+
+  (is whitespace? \space)
+  (is whitespace? \tab)
+  (is whitespace? \newline)
+  (is whitespace? (char "\r"))
+  (is whitespace? \,))
 
 ;;;
 ;;; Generic parsers
@@ -81,17 +93,30 @@
 
 (declare skip-whitespaces)
 
-(defn oneOf
-  "Parser that matches any one character in the given string. Returns the matched character."
-  [s]
-  (char (set s)))
+(with-test
+  (defn oneOf
+    "Parser that matches any one character in the given string. Returns the matched character."
+    [s]
+    (char (set s)))
 
-(defn surrounded-by
-  "Parser that matches character l on the left side of p, and character r on the right side. Returns the result of parser p. Automatically skips spaces within the delimiters."
-  [p l r]
-  (*> (char l)
-      (<* (>> skip-whitespaces p)
-          (char r))))
+  (is= [nil "foo"] (parse-str (oneOf "abc") "foo"))
+  (is= [\b "oo"] (parse-str (oneOf "abc") "boo"))
+  (is= [\c "ba"] (parse-str (oneOf "abc") "cba")))
+
+(with-test
+  (defn surrounded-by
+    "Parser that matches character l on the left side of p, and character r on the right side. Returns the result of parser p. Automatically skips spaces within the delimiters."
+    [p l r]
+    (*> (char l)
+        (<* (>> skip-whitespaces p)
+            (char r))))
+
+  (is= ["foo" ""] (parse-str (surrounded-by (string "foo") \( \)) "(foo)"))
+  (is= ["foo" "bar"] (parse-str (surrounded-by (string "foo") \( \)) "(foo)bar"))
+  (is= [nil "(foo)bar"] (parse-str (surrounded-by (string "foo") \) \() "(foo)bar"))
+
+  ; TODO: this test fails
+  (is= [nil "(foobar)"] (parse-str (surrounded-by (string "foo") \( \)) "(foobar)")))
 
 (defn parens
   "Parser that matches parentheses around parser p. Returns the result of parser p."
@@ -126,18 +151,23 @@
   (is= [nil "f"] (parse-str (match-escape-seq {\f "\n", \b "bar"}) "f"))
   (is= ["bar" "ar"] (parse-str (match-escape-seq {\f "\n", \b "bar"}) "\\bar")))
 
+(with-test
+  (def char-in-string
+    "Parser that matches a single character or escape sequence. Returns a string."
+    (<|> (match-escape-seq { \t "\t"
+                              \b "\b"
+                              \n "\n"
+                              \r "\r"
+                              \f "\f"
+                              \' "'"
+                              \" "\""
+                              \\ "\\" })
+         (<$> str (not-char \"))))
 
-(def char-in-string
-  "Parser that matches a single character or escape sequence. Returns a string."
-  (<|> (match-escape-seq { \t "\t"
-                            \b "\b"
-                            \n "\n"
-                            \r "\r"
-                            \f "\f"
-                            \' "'"
-                            \" "\""
-                            \\ "\\" })
-       (<$> str (not-char \"))))
+  (is= ["\n" ""] (parse-str char-in-string "\\n"))
+  (is= ["\n" "ooo"] (parse-str char-in-string "\\nooo"))
+  (is= ["\"" "text"] (parse-str char-in-string "\\\"text"))
+  (is= ["f" "oobar"] (parse-str char-in-string "foobar")))
 
 (with-test
   ; TODO: this should be a reader macro
@@ -185,17 +215,30 @@
            digit
            (char \:)]))
 
-(def sym
-  "Parser that matches a symbol."
-  (<$> #(symbol (str %1 %2))
-       sym-start
-       (<$> s/join (many sym-char))))
+(with-test
+  (def sym
+    "Parser that matches a symbol."
+    (<$> #(symbol (str %1 %2))
+         sym-start
+         (<$> s/join (many sym-char))))
 
-(def kwd
-  "Parser that matches a keyword.."
-  (*> (char \:)
-      (<$> #(keyword (s/join %))
-           (many sym-char))))
+  (is= [(symbol "foobar") ""] (parse-str sym "foobar"))
+  (is= [(symbol "+") " 5"] (parse-str sym "+ 5"))
+  (is= [(symbol "structure.") " do"] (parse-str sym "structure. do"))
+  (is= [(symbol "&form") ")"] (parse-str sym "&form)")))
+
+(with-test
+  ; TODO: parse :: and resolve against current namespace
+  (def kwd
+    "Parser that matches a keyword."
+    (*> (char \:)
+        (<$> #(keyword (s/join %))
+             (many sym-char))))
+
+  (is= [:foobar ""] (parse-str kwd ":foobar"))
+  (is= [:foobar+ ""] (parse-str kwd ":foobar+"))
+  (is= [:foobar ")"] (parse-str kwd ":foobar)"))
+  (is= [(keyword "&") " form"] (parse-str kwd ":& form")))
 
 (def nil-literal
   "Parser that matches literal nil."
@@ -218,10 +261,15 @@
   ; TODO: ratios
   number)
 
-(def string-literal
-  "Parser that matches a literal string."
-  (<$> #(s/join %)
-       (around (char \") (many char-in-string))))
+(with-test
+  (def string-literal
+    "Parser that matches a literal string."
+    (<$> #(s/join %)
+         (around (char \") (many char-in-string))))
+
+  (is= ["str", ""] (parse-str string-literal "\"str\""))
+  (is= ["str with \n newline", ""] (parse-str string-literal "\"str with \\n newline\""))
+  (is= ["str", "foo"] (parse-str string-literal "\"str\"foo")))
 
 (defn special-char-literal
   "Parser that matches a reserved character literal name. Returns ch."
@@ -229,28 +277,61 @@
   (<* (always ch)
       (string name)))
 
-; TODO: this should be a reader macro
-(def char-literal
-  "Parser that matches a literal character."
-  (*> (char \\)
-      (choice [(special-char-literal \tab "tab")
-               (special-char-literal \space "space")
-               (special-char-literal \newline "newline")
-               (<$> char any-token)])))
+(with-test
+  ; TODO: this should be a reader macro
+  (def char-literal
+    "Parser that matches a literal character."
+    (*> (char \\)
+        (choice [(special-char-literal \tab "tab")
+                 (special-char-literal \space "space")
+                 (special-char-literal \newline "newline")
+                 (<$> to-char any-token)])))
+
+  (is= [\tab ""] (parse-str char-literal "\\tab"))
+  (is= [\d ""] (parse-str char-literal "\\d"))
+  (is= [\d " o"] (parse-str char-literal "\\d o"))
+
+  ; TODO: this test fails
+  (is= [nil "do"] (parse-str char-literal "\\do")))
 
 (declare form)
 
-(defn lst []
-  "Parser that matches a list."
-  (<$> list* (parens (many form))))
+(with-test
+  (defn lst []
+    "Parser that matches a list."
+    (<$> #(if (empty? %) (list) (list* %))
+         (parens (many form))))
+  
+  (is= [(list "foo" :bar true) ""] (parse-str (lst) "(\"foo\" :bar true)"))
+  (is= [(list) ""] (parse-str (lst) "()"))
+  (is= [(list) "bar"] (parse-str (lst) "()bar"))
 
-(defn vector-literal []
-  "Parser that matches a vector."
-  (<$> vec (brackets (many form))))
+  ; TODO: is this correct behavior?
+  (is= [(list) ""] (parse-str (lst) "(())")))
 
-(defn map-literal []
-  "Parser that matches a map."
-  (<$> map-form (braces (many (replicate 2 form)))))
+(with-test
+  (defn vector-literal []
+    "Parser that matches a vector."
+    (<$> vec (brackets (many form))))
+
+  (is= [["foo" :bar true] ""] (parse-str (vector-literal) "[\"foo\" :bar true]"))
+  (is= [[] ""] (parse-str (vector-literal) "[]"))
+  (is= [[] "bar"] (parse-str (vector-literal) "[]bar"))
+
+  ; TODO: is this correct behavior?
+  (is= [[] ""] (parse-str (vector-literal) "[[]]")))
+
+(with-test
+  (defn map-literal []
+    "Parser that matches a map."
+    (<$> map-form (braces (many (replicate 2 form)))))
+
+  (is= [{ "foo" :bar, true false } ""] (parse-str (map-literal) "{ \"foo\" :bar true false }"))
+  (is= [{ "foo" :bar } ""] (parse-str (map-literal) "{ \"foo\", :bar }"))
+  (is= [{} "bar"] (parse-str (map-literal) "{}bar"))
+
+  ; TODO: is this correct behavior?
+  (is= [{} ""] (parse-str (map-literal) "{{}}")))
 
 ;; TODO: implement reader macros:
 ;; ' @ ^ #{} #"" #' #() #_ ` ~ ~@
@@ -262,7 +343,10 @@
                (lst) (vector-literal) (map-literal)
                kwd sym])))
 
-(defn parse
-  "Parses a string of Clojure code into an AST. Returns a sequence of forms."
-  [str]
-  (strip-empty-forms (parse-str (many form) str)))
+(with-test
+  (defn parse
+    "Parses a string of Clojure code into an AST. Returns a sequence of forms."
+    [str]
+    (strip-empty-forms (first (parse-str (many form) str))))
+  
+  (is= [true false] (parse "  true ; foobar\n false")))
