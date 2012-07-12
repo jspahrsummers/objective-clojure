@@ -77,8 +77,9 @@
 ;;;
 
 (with-test
-  (defn whitespace? [c]
+  (defn whitespace?
     "Tests whether a character is considered whitespace in Clojure."
+    [c]
     (or (= c \,) (Character/isWhitespace #^java.lang.Character c)))
 
   (is whitespace? \space)
@@ -297,8 +298,9 @@
 (declare form)
 
 (with-test
-  (defn lst []
+  (defn lst
     "Parser that matches a list."
+    []
     (<$> #(if (empty? %) (list) (list* %))
          (parens (many form))))
   
@@ -310,8 +312,9 @@
   (is= [(list) ""] (parse-str (lst) "(())")))
 
 (with-test
-  (defn vector-literal []
+  (defn vector-literal
     "Parser that matches a vector."
+    []
     (<$> vec (brackets (many form))))
 
   (is= [["foo" :bar true] ""] (parse-str (vector-literal) "[\"foo\" :bar true]"))
@@ -322,8 +325,9 @@
   (is= [[] ""] (parse-str (vector-literal) "[[]]")))
 
 (with-test
-  (defn map-literal []
+  (defn map-literal
     "Parser that matches a map."
+    []
     (<$> map-form (braces (many (replicate 2 form)))))
 
   (is= [{ "foo" :bar, true false } ""] (parse-str (map-literal) "{ \"foo\" :bar true false }"))
