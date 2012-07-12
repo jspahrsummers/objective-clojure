@@ -84,16 +84,60 @@
 
          [:reader/symbol sym] [:identifier sym]
          
-         ; TODO: create an interned string
+         ; TODO: intern a selector
          ;[:reader/keyword sym]
 
-         ; TODO: match special forms
-         ;[:reader/list items]
+         ;; TODO: it's probable that some of these need to be taken care of before hitting the backend
 
-         ;(['. obj sel & args] :seq) (concat
+         ; TODO
+         ;[:reader/list [[:reader/symbol "def"] [:reader/symbol sym] & init?]]
+
+         ; TODO
+         ;[:reader/list [[:reader/symbol "if"] test then & else?]]
+
+         ; TODO
+         ;[:reader/list [[:reader/symbol "do"] & exprs]]
+
+         ; TODO
+         ;[:reader/list [[:reader/symbol "let"] [:reader/vector bindings] & exprs]]
+
+         ; TODO
+         ;[:reader/list [[:reader/symbol "quote"] form]]
+
+         ; TODO
+         ;[:reader/list [[:reader/symbol "var"] [:reader/symbol sym]]]
+
+         ; TODO
+         ;[:reader/list [[:reader/symbol "fn"] [:reader/vector params] & exprs]]
+         ;[:reader/list [[:reader/symbol "fn"] & overloads]]
+
+         ; TODO
+         ;[:reader/list [[:reader/symbol "loop"] [:reader/vector bindings] & exprs]]
+
+         ; TODO
+         ;[:reader/list [[:reader/symbol "recur"] & exprs]]
+
+         ; TODO
+         ;[:reader/list [[:reader/symbol "throw"] expr]]
+
+         ; TODO
+         ;[:reader/list [[:reader/symbol "try"] & exprs]]
+
+         ; TODO
+         ;[:reader/list [[:reader/symbol "monitor-enter"] x]]
+
+         ; TODO
+         ;[:reader/list [[:reader/symbol "monitor-exit"] x]]
+
+         ; TODO
+         ;[:reader/list [[:reader/symbol "."] obj sel & args]]
          ;                             ; TODO: support non-literal selectors
          ;                             [:message-expr (gen-form obj) [:selector-literal (str sel)]]
          ;                             (map gen-form args))
+
+         ; TODO
+         ;[:reader/list & exprs]
+
 
          ; TODO: emit NSArray literal
          ;[:reader/vector items]
