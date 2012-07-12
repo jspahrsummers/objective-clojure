@@ -366,21 +366,30 @@
 ;;;
 
 ;; TODO: implement reader macros:
-;; @ ^ #{} #"" #' #() ` ~ ~@
+;; #{} #"" #' #() ` ~ ~@
 
 (with-test
   ; TODO: expose this table (and manipulations upon it) to user code
   (def read-table
     "A table of reader macros, keyed by a string name which is used only for identification. Each value should be a Zetta parser that returns some kind of Clojure form (including an empty-form)."
-    { "#_" (>> (*> (string "#_") form)
-               (always empty-form))
+    { "#_" (*> (string "#_") form (always empty-form))
 
       "'" (<$> #(list 'quote %)
                (*> (char \') form))
+
+      "@" (<$> #(list 'deref %)
+               (*> (char \@) form))
+
+      "^" (<$> #(with-meta %2 (if (map? %1) %1 { :tag %1 }))
+               (*> (char \^) form)
+               form)
     })
 
   (is= [empty-form ""] (parse-str (reader-macro) "#_ foo"))
   (is= [empty-form ""] (parse-str (reader-macro) "#_ 5"))
   (is= [empty-form ""] (parse-str (reader-macro) "#_ (:some :thing)"))
   (is= ['(quote foo) ""] (parse-str (reader-macro) "'foo"))
-  (is= ['(quote :foo) ""] (parse-str (reader-macro) "':foo")))
+  (is= ['(quote :foo) ""] (parse-str (reader-macro) "':foo"))
+  (is= ['(deref foo) ""] (parse-str (reader-macro) "@foo"))
+  (is= [^{:tag :foo} [1 2 3] ""] (parse-str (reader-macro) "^:foo [1 2 3]"))
+  (is= [^{:foo :bar} [1 2 3] ""] (parse-str (reader-macro) "^{:foo :bar} [1 2 3]")))
