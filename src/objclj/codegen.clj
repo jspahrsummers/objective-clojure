@@ -11,12 +11,14 @@
   "Translates an Objective-C AST into a string of Objective-C code."
   #(first %))
 
-(defn escape [c]
+(defn escape
   "Escapes a single character, to create part of a valid Objective-C identifier."
+  [c]
   (str "S" (int c)))
 
-(defn sel-parts [sel]
+(defn sel-parts
   "Splits a selector into its constituent parts, keeping any colons. Returns a sequence of strings."
+  [sel]
   (re-seq #"[a-zA-Z0-9_]+\:?" sel))
 
 ;; Expressions
@@ -60,8 +62,9 @@
   ; TODO: do we need to escape initial digits?
   (s/replace id #"[^a-zA-Z0-9_]" (comp escape char)))
 
-(defn method-part [selparts args]
+(defn method-part
   "Given remaining selector parts and arguments, generates the rest of an Objective-C message send."
+  [selparts args]
   (str
     (cond (empty? selparts) (str ", " (s/join ", " args))
           (empty? args) (str " " (first selparts))
@@ -97,8 +100,9 @@
 (defpred char? char?)
 (defpred string? string?)
 
-(defn gen-form [form]
+(defn gen-form
   "Generates an Objective-C AST from a Clojure form"
+  [form]
   (match form
          [:reader/literal true] [:bool-literal true]
          [:reader/literal false] [:bool-literal false]
@@ -179,7 +183,8 @@
 ;;; API
 ;;;
 
-(defn codegen [forms]
+(defn codegen
   "Generates a string of Objective-C code from a sequence of Clojure forms"
+  [forms]
   (doall
     (map #(objc (gen-form %)) forms)))

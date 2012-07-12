@@ -16,29 +16,35 @@
   nil)
 
 ; TODO: resolve namespaced symbols
-(defn symbol-form [sym]
-  "Returns a vector representing a symbol. sym should be a string."
+(defn symbol-form
+  "Returns a vector representing a Clojure symbol. sym should be a string."
+  [sym]
   [ :reader/symbol sym ])
 
 ; TODO: resolve double-colon keywords
-(defn keyword-form [kwd]
-  "Returns a vector representing a keyword. kwd should be a string and should not include an initial colon."
+(defn keyword-form
+  "Returns a vector representing a Clojure keyword. kwd should be a string and should not include an initial colon."
+  [kwd]
   [ :reader/keyword kwd ])
 
-(defn literal-form [x]
-  "Returns a vector representing a literal value. x may be a string, number, character, boolean, or nil. (Use keyword-form for keywords.)"
+(defn literal-form
+  "Returns a vector representing a Clojure literal value. x may be a string, number, character, boolean, or nil. Use keyword-form for keywords."
+  [x]
   [ :reader/literal x ])
 
-(defn vector-form [items]
-  "Returns a vector representing a vector. items may be any kind of sequence."
+(defn vector-form
+  "Returns a vector representing a Clojure vector. items may be any kind of sequence."
+  [items]
   [ :reader/vector (vec items) ])
 
-(defn list-form [items]
-  "Returns a vector representing a list. items may be any kind of sequence."
+(defn list-form
+  "Returns a vector representing a Clojure list. items may be any kind of sequence."
+  [items]
   [ :reader/list (vec items) ])
 
-(defn map-form [pairs]
-  "Returns a vector representing a map. pairs may be any kind of sequence."
+(defn map-form
+  "Returns a vector representing a Clojure map. pairs should be a sequence of two-item sequences."
+  [pairs]
   (let [keys (map #(nth % 0) pairs)
         vals (map #(nth % 1) pairs)]
     [ :reader/map (vec keys) (vec vals) ]))
@@ -48,6 +54,7 @@
 ;;;
 
 (defn whitespace? [c]
+  "Tests whether a character is considered whitespace in Clojure."
   (or (= c \,) (Character/isWhitespace #^java.lang.Character c)))
 
 ;;;
@@ -56,47 +63,56 @@
 
 (declare skip-whitespaces)
 
-(defn oneOf [s]
+(defn oneOf
   "Parser that matches any one character in the given string."
+  [s]
   (char (set s)))
 
-(defmacro regex [pat]
+(defmacro regex
   "Parser that matches a regular expression. Returns the matched string."
+  [pat]
   `(take-while1 #(re-matches pat %)))
 
-(defmacro always-fn [fn & more]
+(defmacro always-fn
   "Parser that does not consume any input, and always returns the result of fn."
+  [fn & more]
   `(always (~fn ~@more)))
 
-(defn surrounded-by [p l r]
+(defn surrounded-by
   "Matches character l on the left side of p, and character r on the right side. Returns the result of parser p. Automatically skips spaces within the delimiters."
+  [p l r]
   (*> (char l)
       (<* (>> skip-whitespaces p)
           (char r))))
 
-(defn parens [p]
+(defn parens
   "Matches parentheses around parser p. Returns the result of parser p."
+  [p]
   (surrounded-by p \( \)))
 
-(defn brackets [p]
+(defn brackets
   "Matches square brackets around parser p. Returns the result of parser p."
+  [p]
   (surrounded-by p \[ \]))
 
-(defn braces [p]
+(defn braces
   "Matches curly braces around parser p. Returns the result of parser p."
+  [p]
   (surrounded-by p \{ \}))
 
 ;;;
 ;;; Clojure-specific parsers
 ;;;
 
-(defmacro match-escape-seq [seq rep]
+(defmacro match-escape-seq
   "Parser that matches a backslash followed by seq. Returns rep."
+  [seq rep]
   `(<* (always ~rep)
        (string (str \\ ~seq))))
 
-(defn match-escape-seqs [seqmap]
+(defn match-escape-seqs
   "Parser that matches a backslash followed by any key in seqmap. Returns the value associated with the matched key, or the literal escape sequence if no match was found."
+  [seqmap]
   (*> (char \\)
       (<$> #(get seqmap % (str \\ %))
            (oneOf (str (keys seqmap))))))
@@ -168,8 +184,9 @@
   (<$> #(literal-form (s/join %))
        (around (char \") (many char-in-string))))
 
-(defn special-char-literal [ch name]
+(defn special-char-literal
   "Parser that matches the name of a special character literal. Returns ch."
+  [ch name]
   (<* (always-fn literal-form ch)
       (string name)))
 
@@ -203,6 +220,7 @@
                (lst) (vector-literal) (map-literal)
                kwd sym])))
 
-(defn parse [str]
+(defn parse
   "Parses a string of Clojure code into an AST"
+  [str]
   (-> (parse-once (many form) str) :result))
