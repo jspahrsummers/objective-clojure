@@ -20,7 +20,7 @@
   [ :reader/symbol sym ])
 
 (defn keyword-form [kwd]
-  "Returns a vector representing a keyword. kwd should be a string."
+  "Returns a vector representing a keyword. kwd should be a string and should not include an initial colon."
   [ :reader/keyword kwd ])
 
 (defn literal-form [x]
@@ -129,18 +129,25 @@
   (skip-many whitespace))
 
 (def sym-special-char
-  (oneOf "*+!-_?/.%:&"))
+  (oneOf "*+!-_?/.%&"))
 
 (def sym-start
   (<|> letter sym-special-char))
 
 (def sym-char
-  (<|> sym-start digit))
+  (choice [sym-start
+           digit
+           (char \:)]))
 
 (def sym
   (<$> #(symbol-form (str %1 %2))
        sym-start
        (<$> str/join (many sym-char))))
+
+(def kwd
+  (*> (char \:)
+      (<$> #(keyword-form (str/join %))
+           (take-while1 #(not (whitespace? %))))))
 
 (def nil-literal
   (<* (always-fn literal-form nil)
@@ -193,7 +200,7 @@
   (>> skip-whitespaces
       (choice [nil-literal true-literal false-literal number-literal string-literal char-literal
                (lst) (vector-literal) (map-literal)
-               sym])))
+               kwd sym])))
 
 (defn parse [str]
   "Parses a string of Clojure code into an AST"
