@@ -30,21 +30,42 @@
         vals (map #(nth % 1) pairs)]
     (zipmap keys vals)))
 
-(with-test
-  ; TODO: this doesn't work on maps right now
-  (defn strip-empty-forms
-    "Collapses all instances of empty-form from the given sequence of forms (and all their sub-forms)."
-    [forms]
+(defmulti strip-empty-forms
+  "Collapses all instances of empty-form from the given collection of forms (and all their sub-forms)."
+  #(type %))
 
-    ; TODO: this could get nasty with too much recursion
-    (let [mapped-forms (map #(if (seq? %) (strip-empty-forms %) %) forms)]
-      (filter #(not (= empty-form %)) mapped-forms)))
+; TODO: try to eliminate the non-tail recursion in this implementation
+(defmacro strip-empty-forms'
+  "Like strip-empty-forms, but always returns a sequence."
+  [forms]
+  `(filter #(not (= empty-form %)) (map strip-empty-forms ~forms)))
 
+(defmethod strip-empty-forms clojure.lang.IPersistentVector [forms]
+  (vec (strip-empty-forms' forms)))
+
+(defmethod strip-empty-forms clojure.lang.IPersistentMap [formmap]
+  (let [items (interleave (keys formmap) (vals formmap))]
+    (apply sorted-map (strip-empty-forms' items))))
+
+(defmethod strip-empty-forms clojure.lang.IPersistentSet [forms]
+  (set (strip-empty-forms' forms)))
+
+(defmethod strip-empty-forms clojure.lang.IPersistentList [forms]
+  (let [forms' (strip-empty-forms' forms)]
+    (if (empty? forms') (list) (list* forms'))))
+
+(defmethod strip-empty-forms :default [form]
+  form)
+
+(with-test #'strip-empty-forms
   (is= (list) (strip-empty-forms (list empty-form)))
   (is= (list) (strip-empty-forms (list empty-form empty-form)))
-  (is= (list '()) (strip-empty-forms (list empty-form (list empty-form))))
-  (is= (list []) (strip-empty-forms (list empty-form [empty-form])))
-  (is= (list #{}) (strip-empty-forms (list empty-form #{ empty-form }))))
+  (is= (list '(true)) (strip-empty-forms (list empty-form (list true empty-form))))
+  (is= (list [true]) (strip-empty-forms (list empty-form [true empty-form])))
+  (is= (list #{true}) (strip-empty-forms (list empty-form #{ true empty-form })))
+  (is= (list {:a :b}) (strip-empty-forms (list empty-form { :a empty-form, empty-form :b })))
+  (is= (list {:a :b}) (strip-empty-forms (list empty-form { :a empty-form, :b empty-form })))
+  (is= (list {:a :b}) (strip-empty-forms (list empty-form { empty-form :a, :b empty-form }))))
 
 ;;;
 ;;; Character classes
