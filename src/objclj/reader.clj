@@ -86,11 +86,6 @@
   [s]
   (char (set s)))
 
-(defmacro regex
-  "Parser that matches a regular expression. Returns the matched string."
-  [pat]
-  `(take-while1 #(re-matches pat %)))
-
 (defn surrounded-by
   "Parser that matches character l on the left side of p, and character r on the right side. Returns the result of parser p. Automatically skips spaces within the delimiters."
   [p l r]
