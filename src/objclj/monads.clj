@@ -1,5 +1,5 @@
 (ns objclj.monads
-  (:use [clojure.algo.monads :rename { domonad m-domonad }])
+  (:use [clojure.algo.monads :rename { domonad m-domonad } :exclude [fetch-val]])
   (:use clojure.test)
   (:use objclj.test))
 
@@ -17,7 +17,7 @@
         flat-exprs (vec (reduce concat monad-exprs))]
     (list `m-domonad flat-exprs (last exprs))))
 
-(deftest monads
+(deftest test-domonad
   (with-monad (writer-m "")
     (is= [3 "foobar"] (domonad
                         (x <- (m-result 1))
@@ -25,3 +25,16 @@
                         (y <- (m-result 2))
                         (write "bar")
                         (+ x y)))))
+
+(with-test
+  (defn fetch-val
+    "A rewritten version of clojure.algo.monads/fetch-val that does not depend on the key being any particular type."
+    [key]
+    (with-monad state-m
+      (domonad
+        (s <- (fetch-state))
+        (get s key))))
+
+  (let [st (with-monad state-m
+             (domonad (x <- (fetch-val :foo)) (str x)))]
+    (is= [":bar" { :foo :bar }] (st { :foo :bar }))))
