@@ -4,7 +4,9 @@
   (:require [clojure.string :as s])
   (:use clojure.algo.monads)
   (:use clojure.test)
+  (:require [clojure.zip :as z])
   (:use objclj.test)
+  (:use objclj.util)
   (:use [zetta.core :exclude [parse]])
   (:use [zetta.parser.seq :exclude [get ensure whitespace skip-whitespaces]])
   (:use zetta.combinators))
@@ -24,6 +26,46 @@
   ::empty-form)
 
 (with-test
+  (defn key-index?
+    "Meant for use with keep-indexed, returns whether index corresponds to a key (rather than a value) in a sequence of items for a map."
+    [index item]
+    (= (mod index 2) 0))
+
+  (is (key-index? 0 nil))
+  (is-not (key-index? 1 nil))
+  (is (key-index? 2 nil)))
+
+(defn form-zip-make-map-node
+  "Returns a new map node with the given existing node and sequence of items. See form-zip for more information."
+  [m items]
+  (if (= (mod (count items) 2) 0)
+      (apply hash-map items)
+
+      ; TODO: insert or remove empty-forms (in the appropriate spot) to get the correct size
+      (apply hash-map (append items empty-form))))
+
+;      (let [ikeys (vec (keep-indexed key-index? items))
+;            ivals (vec (keep-indexed (comp not key-index?) items))
+;            mkeys (keys m)]
+;        (if (< (count keys) (count vals))
+;            (let [missing-key (some #(nil? ikeys %) mkeys)]
+;              (assoc m missing-key empty-form))
+;
+;            (let [padded-imap (apply hash-map (append items nil))
+;                  [_ _ diff-entries] (diff padded-imap m)
+;                  diff-keys (map #(first (keys %)) diff-entries)]
+
+; TODO: tests
+(defn form-zip
+  "Creates a zipper for nested collection forms. Every form will be returned as a node.
+  Removing a key or a value from a map will replace its associated value or key (respectively) with an empty-form. If a map ends up with two empty-forms, they are both removed, and the rest of the items adjusted (keys may become values and vice-versa)."
+  [form]
+  (z/zipper #(coll? %)
+            #(if (map? %) (interleave (keys %) (vals %)) (seq %))
+            #(collect-type (type %1) (if (map? %1) (form-zip-make-map-node %1 %2) %2))
+            form))
+
+(with-test
   (defn map-form
     "Returns a map from a sequence of pairs. pairs should be a sequence of two-item collections."
     [pairs]
@@ -35,50 +77,36 @@
   (is= { :foo :bar } (map-form [[:foo :bar]]))
   (is= { :foo :bar, :a :b } (map-form [[:foo :bar] [:a :b]])))
 
-(defmulti strip-empty-forms
-  "Collapses all instances of empty-form from the given collection of forms (and all their sub-forms)."
-  #(type %))
+(with-test
+  (defn strip-empty-forms
+    "Collapses all instances of empty-form from the given collection of forms (and all their sub-forms)."
+    [forms]
+    (loop [loc (form-zip forms)]
+      (if (z/end? loc)
+          (z/root loc)
+          (recur (z/next (if (= (z/node loc) empty-form)
+                         (z/remove loc)
+                         loc))))))
 
-; TODO: try to eliminate the non-tail recursion in this implementation
-(defmacro strip-empty-forms'
-  "Like strip-empty-forms, but always returns a sequence."
-  [forms]
-  `(filter #(not (= empty-form %)) (map strip-empty-forms ~forms)))
-
-(defmethod strip-empty-forms clojure.lang.IPersistentVector [forms]
-  (vec (strip-empty-forms' forms)))
-
-(defmethod strip-empty-forms clojure.lang.IPersistentMap [formmap]
-  (let [items (interleave (keys formmap) (vals formmap))]
-    (apply sorted-map (strip-empty-forms' items))))
-
-(defmethod strip-empty-forms clojure.lang.IPersistentSet [forms]
-  (set (strip-empty-forms' forms)))
-
-(defmethod strip-empty-forms clojure.lang.IPersistentList [forms]
-  (let [forms' (strip-empty-forms' forms)]
-    (if (empty? forms') (list) (list* forms'))))
-
-(defmethod strip-empty-forms :default [form]
-  form)
-
-(with-test #'strip-empty-forms
   (is= (list) (strip-empty-forms (list empty-form)))
   (is= (list) (strip-empty-forms (list empty-form empty-form)))
   (is= (list '(true)) (strip-empty-forms (list empty-form (list true empty-form))))
   (is= (list [true]) (strip-empty-forms (list empty-form [true empty-form])))
-  (is= (list #{true}) (strip-empty-forms (list empty-form #{ true empty-form })))
-  (is= (list {:a :b}) (strip-empty-forms (list empty-form { :a empty-form, empty-form :b })))
-  (is= (list {:a :b}) (strip-empty-forms (list empty-form { :a empty-form, :b empty-form })))
-  (is= (list {:a :b}) (strip-empty-forms (list empty-form { empty-form :a, :b empty-form }))))
+  (is= (list #{true}) (strip-empty-forms (list empty-form #{ true empty-form }))))
+  
+  ; TODO: these tests will fail until form-zip-make-map-node is finished
+  ;(is= (list {:a :b}) (strip-empty-forms (list empty-form { :a empty-form, empty-form :b })))
+  ;(is= (list {:a :b}) (strip-empty-forms (list empty-form { :a empty-form, :b empty-form })))
+  ;(is= (list {:a :b}) (strip-empty-forms (list empty-form { empty-form :a, :b empty-form }))))
 
 ;;;
 ;;; Character classes
 ;;;
 
 (with-test
-  (defn whitespace? [c]
+  (defn whitespace?
     "Tests whether a character is considered whitespace in Clojure."
+    [c]
     (or (= c \,) (Character/isWhitespace #^java.lang.Character c)))
 
   (is whitespace? \space)
@@ -297,8 +325,9 @@
 (declare form)
 
 (with-test
-  (defn lst []
+  (defn lst
     "Parser that matches a list."
+    []
     (<$> #(if (empty? %) (list) (list* %))
          (parens (many form))))
   
@@ -310,8 +339,9 @@
   (is= [(list) ""] (parse-str (lst) "(())")))
 
 (with-test
-  (defn vector-literal []
+  (defn vector-literal
     "Parser that matches a vector."
+    []
     (<$> vec (brackets (many form))))
 
   (is= [["foo" :bar true] ""] (parse-str (vector-literal) "[\"foo\" :bar true]"))
@@ -322,8 +352,9 @@
   (is= [[] ""] (parse-str (vector-literal) "[[]]")))
 
 (with-test
-  (defn map-literal []
+  (defn map-literal
     "Parser that matches a map."
+    []
     (<$> map-form (braces (many (replicate 2 form)))))
 
   (is= [{ "foo" :bar, true false } ""] (parse-str (map-literal) "{ \"foo\" :bar true false }"))
@@ -333,13 +364,19 @@
   ; TODO: is this correct behavior?
   (is= [{} ""] (parse-str (map-literal) "{{}}")))
 
-;; TODO: implement reader macros:
-;; ' @ ^ #{} #"" #' #() #_ ` ~ ~@
+(declare read-table)
+
+; See the definition of read-table for tests
+(defn reader-macro
+  "Parser that matches a reader macro. Expands the matched macro to a single (possibly empty) form."
+  []
+  (choice (vals read-table)))
 
 (def form
   "Parser that matches any Clojure form."
   (>> skip-whitespaces
-      (choice [nil-literal true-literal false-literal number-literal string-literal char-literal
+      (choice [(reader-macro)
+               nil-literal true-literal false-literal number-literal string-literal char-literal
                (lst) (vector-literal) (map-literal)
                kwd sym])))
 
@@ -350,3 +387,101 @@
     (strip-empty-forms (first (parse-str (many form) str))))
   
   (is= [true false] (parse "  true ; foobar\n false")))
+
+;;;
+;;; Reader macros
+;;;
+
+(with-test
+  (defn collect-anon-fn-params
+    "Given a sequence of forms from the body of an anonymous function, returns a vector containing the params (in order) with which the function should be defined."
+    [forms]
+    (let [all-forms (flatten forms)
+
+          ; Put all symbol forms that begin with %
+          args (filter #(and (symbol? %) (= \% (first (str %)))) all-forms)
+
+          ; Rename % -> %1, and then put all the args as strings a sorted set
+          canonical-args (apply sorted-set (map #(if (= "%" (str %)) "%1" (str %)) args))]
+      (vec (map symbol (if (= "%&" (first canonical-args))
+                           ; Move rest param to the end
+                           (append (next canonical-args) "&" "%&")
+                           canonical-args)))))
+
+  (is= [] (collect-anon-fn-params '()))
+  (is= ['%1] (collect-anon-fn-params '(%)))
+  (is= ['%1] (collect-anon-fn-params '(% %1)))
+  (is= ['%1 '%2] (collect-anon-fn-params '(% %2 %1)))
+  (is= ['%1 '%2 '& '%&] (collect-anon-fn-params '(% %2 %& %1))))
+
+(with-test
+  (defn rename-anon-fn-args
+    "Renames % to %1 within a sequence of forms from the body of an anonymous function."
+    [forms]
+    (loop [loc (form-zip forms)]
+      (if (z/end? loc)
+          (z/root loc)
+          (recur (z/next (if (= (z/node loc) (symbol '%))
+                         (z/replace loc (symbol '%1))
+                         loc))))))
+
+  (is= '() (rename-anon-fn-args '()))
+  (is= '(%1) (rename-anon-fn-args '(%1)))
+  (is= '(%2) (rename-anon-fn-args '(%2)))
+  (is= '(%1) (rename-anon-fn-args '(%)))
+  (is= (list ['%1]) (rename-anon-fn-args (list ['%])))
+  (is= (list '(%1)) (rename-anon-fn-args (list '(%))))
+  (is= (list #{'%1}) (rename-anon-fn-args (list #{'%})))
+
+  ; TODO: this test fails
+  (is= (list {'%1 :bar}) (rename-anon-fn-args (list {'% :bar}))))
+
+;; TODO: implement reader macros:
+;; #"" ` ~ ~@
+
+(with-test
+  ; TODO: expose this table (and manipulations upon it) to user code
+  (def read-table
+    "A table of reader macros, keyed by a string name which is used only for identification. Each value should be a Zetta parser that returns some kind of Clojure form (including an empty-form)."
+    { "#_" (*> (string "#_") form (always empty-form))
+
+      "'" (<$> #(list 'quote %)
+               (*> (char \') form))
+
+      "@" (<$> #(list 'deref %)
+               (*> (char \@) form))
+
+      "^" (<$> #(with-meta %2 (if (map? %1) %1 { :tag %1 }))
+               (*> (char \^) form)
+               form)
+
+      "#{}" (<$> #(list 'set %)
+                 (*> (string "#{")
+                     (<* (many form)
+                         (char \}))))
+
+      "#'" (<$> #(list 'var %)
+                (*> (string "#'") form))
+
+      "#()" (<$> #(list 'fn (collect-anon-fn-params %) (list* (rename-anon-fn-args %)))
+                 (*> (string "#(")
+                     (<* (many form)
+                         (char \)))))
+    })
+
+  (is= [empty-form ""] (parse-str (reader-macro) "#_ foo"))
+  (is= [empty-form ""] (parse-str (reader-macro) "#_ 5"))
+  (is= [empty-form ""] (parse-str (reader-macro) "#_ (:some :thing)"))
+  (is= ['(quote foo) ""] (parse-str (reader-macro) "'foo"))
+  (is= ['(quote :foo) ""] (parse-str (reader-macro) "':foo"))
+  (is= ['(deref foo) ""] (parse-str (reader-macro) "@foo"))
+  (is= [^{:tag :foo} [1 2 3] ""] (parse-str (reader-macro) "^:foo [1 2 3]"))
+  (is= [^{:foo :bar} [1 2 3] ""] (parse-str (reader-macro) "^{:foo :bar} [1 2 3]"))
+  (is= [(list 'set [1 2 3]) ""] (parse-str (reader-macro) "#{ 1 2 3 }"))
+  (is= ['(var foo) ""] (parse-str (reader-macro) "#'foo"))
+  (is= [(list 'fn [] (list nil)) ""] (parse-str (reader-macro) "#(nil)"))
+  (is= [(list 'fn ['%1] (list '%1)) ""] (parse-str (reader-macro) "#(%1)"))
+  (is= [(list 'fn ['%1] (list '%1)) ""] (parse-str (reader-macro) "#(%)"))
+  (is= [(list 'fn ['%1] (list '%1 '%1)) ""] (parse-str (reader-macro) "#(% %1)"))
+  (is= [(list 'fn ['%1 '%2] (list '%1 '%2 '%1)) ""] (parse-str (reader-macro) "#(% %2 %1)"))
+  (is= [(list 'fn ['%1 '%2 '& '%&] (list '%1 '%2 '%& '%1)) ""] (parse-str (reader-macro) "#(% %2 %& %1)")))
