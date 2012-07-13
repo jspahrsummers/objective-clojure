@@ -392,8 +392,52 @@
 ;;; Reader macros
 ;;;
 
+(with-test
+  (defn collect-anon-fn-params
+    "Given a sequence of forms from the body of an anonymous function, returns a vector containing the params (in order) with which the function should be defined."
+    [forms]
+    (let [all-forms (flatten forms)
+
+          ; Put all symbol forms that begin with %
+          args (filter #(and (symbol? %) (= \% (first (str %)))) all-forms)
+
+          ; Rename % -> %1, and then put all the args as strings a sorted set
+          canonical-args (apply sorted-set (map #(if (= "%" (str %)) "%1" (str %)) args))]
+      (vec (map symbol (if (= "%&" (first canonical-args))
+                           ; Move rest param to the end
+                           (append (next canonical-args) "&" "%&")
+                           canonical-args)))))
+
+  (is= [] (collect-anon-fn-params '()))
+  (is= ['%1] (collect-anon-fn-params '(%)))
+  (is= ['%1] (collect-anon-fn-params '(% %1)))
+  (is= ['%1 '%2] (collect-anon-fn-params '(% %2 %1)))
+  (is= ['%1 '%2 '& '%&] (collect-anon-fn-params '(% %2 %& %1))))
+
+(with-test
+  (defn rename-anon-fn-args
+    "Renames % to %1 within a sequence of forms from the body of an anonymous function."
+    [forms]
+    (loop [loc (form-zip forms)]
+      (if (z/end? loc)
+          (z/root loc)
+          (recur (z/next (if (= (z/node loc) (symbol '%))
+                         (z/replace loc (symbol '%1))
+                         loc))))))
+
+  (is= '() (rename-anon-fn-args '()))
+  (is= '(%1) (rename-anon-fn-args '(%1)))
+  (is= '(%2) (rename-anon-fn-args '(%2)))
+  (is= '(%1) (rename-anon-fn-args '(%)))
+  (is= (list ['%1]) (rename-anon-fn-args (list ['%])))
+  (is= (list '(%1)) (rename-anon-fn-args (list '(%))))
+  (is= (list #{'%1}) (rename-anon-fn-args (list #{'%})))
+
+  ; TODO: this test fails
+  (is= (list {'%1 :bar}) (rename-anon-fn-args (list {'% :bar}))))
+
 ;; TODO: implement reader macros:
-;; #"" #() ` ~ ~@
+;; #"" ` ~ ~@
 
 (with-test
   ; TODO: expose this table (and manipulations upon it) to user code
@@ -418,6 +462,11 @@
 
       "#'" (<$> #(list 'var %)
                 (*> (string "#'") form))
+
+      "#()" (<$> #(list 'fn (collect-anon-fn-params %) (list* (rename-anon-fn-args %)))
+                 (*> (string "#(")
+                     (<* (many form)
+                         (char \)))))
     })
 
   (is= [empty-form ""] (parse-str (reader-macro) "#_ foo"))
@@ -429,4 +478,10 @@
   (is= [^{:tag :foo} [1 2 3] ""] (parse-str (reader-macro) "^:foo [1 2 3]"))
   (is= [^{:foo :bar} [1 2 3] ""] (parse-str (reader-macro) "^{:foo :bar} [1 2 3]"))
   (is= [(list 'set [1 2 3]) ""] (parse-str (reader-macro) "#{ 1 2 3 }"))
-  (is= [(list 'var 'foo) ""] (parse-str (reader-macro) "#'foo")))
+  (is= ['(var foo) ""] (parse-str (reader-macro) "#'foo"))
+  (is= [(list 'fn [] (list nil)) ""] (parse-str (reader-macro) "#(nil)"))
+  (is= [(list 'fn ['%1] (list '%1)) ""] (parse-str (reader-macro) "#(%1)"))
+  (is= [(list 'fn ['%1] (list '%1)) ""] (parse-str (reader-macro) "#(%)"))
+  (is= [(list 'fn ['%1] (list '%1 '%1)) ""] (parse-str (reader-macro) "#(% %1)"))
+  (is= [(list 'fn ['%1 '%2] (list '%1 '%2 '%1)) ""] (parse-str (reader-macro) "#(% %2 %1)"))
+  (is= [(list 'fn ['%1 '%2 '& '%&] (list '%1 '%2 '%& '%1)) ""] (parse-str (reader-macro) "#(% %2 %& %1)")))
