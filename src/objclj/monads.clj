@@ -8,6 +8,8 @@
 
   The last expression given is returned, identically to the final argument of clojure.algo.monads/domonad. <- may not appear in the last expression."
   [& exprs]
+
+  ; TODO: improve this to not require parentheses around (x <- y)
   (let [monad-exprs (map #(if (and (list? %) (= (second %) '<-))
                               (cons (first %) (drop 2 %))
                               (list '_ %))
