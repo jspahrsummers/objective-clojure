@@ -2,7 +2,7 @@
   (:gen-class)
   (:use clojure.stacktrace)
   (:use [objclj.codegen :only [codegen]])
-  (:use [objclj.reader :only [parse]]))
+  (:use [objclj.reader :only [read-forms]]))
 
 (defn rep-line
   "Reads, evaluates, and prints a single line from stdin. Returns whether the REPL should continue."
@@ -15,7 +15,7 @@
         false)
 
       (try
-        (let [ast (parse input)]
+        (let [ast (read-forms input)]
           (println ast)
 
           ; TODO: generate code for main()

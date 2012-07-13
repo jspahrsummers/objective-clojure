@@ -1,21 +1,97 @@
 (ns objclj.reader
   ; Zetta defines some symbols that conflict with builtins
-  (:refer-clojure :rename { char to-char } :exclude [take-while replicate take])
+  (:refer-clojure :rename { char to-char } :exclude [replicate resolve take take-while])
   (:require [clojure.string :as s])
-  (:use clojure.algo.monads)
+  (:use [clojure.algo.monads :exclude [fetch-val]])
   (:use clojure.test)
   (:require [clojure.zip :as z])
+  (:use [clojure.core.match :only [match]])
+  (:use objclj.monads)
   (:use objclj.test)
   (:use objclj.util)
-  (:use [zetta.core :exclude [parse]])
+  (:use [zetta.core :exclude [with-parser, do-parser]])
   (:use [zetta.parser.seq :exclude [get ensure whitespace skip-whitespaces]])
   (:use zetta.combinators))
 
-(defn parse-str
-  "Runs parser p on string s and returns a two-item vector containing the result and any unparsed part of the string."
-  [p s]
-  (let [result (parse-once p s)]
-    [(-> result :result) (s/join (-> result :remainder))]))
+;;;
+;;; Environment
+;;;
+
+;; The environment, which includes bindings, is maintained as a map of fully-resolved symbols to their bound values.
+;; When used in conjunction with the actual parsing code, the environment is passed around in a state-t which wraps Zetta's parser-m.
+
+(defmacro with-state-t
+  "Like zetta.core/with-parser, but lifted into a state-t"
+  [& forms]
+  `(with-monad (state-t parser-m) ~@forms))
+
+(defmacro do-state-t
+  "Like zetta.core/do-state-t, but lifted into a state-t"
+  [& forms]
+  `(domonad (state-t parser-m) ~@forms))
+
+(def default-bindings
+  "Default bindings for a new environment"
+  { 'objclj.core/*ns* 'user })
+
+(declare resolve)
+
+(with-test
+  (defn bind
+    "Resolves and binds sym to value, replacing any existing value. Returns the resolved symbol."
+    [s value]
+    (do-state-t [sym (resolve s)
+                 _   (set-val sym value)]
+      sym))
+
+  (is= [nil 5 10]
+    (parse-once
+      (eval-state-t
+        ; TODO: remove coupling with 'resolve'
+        (do-state-t [sym (resolve (symbol "foo"))
+                     a (fetch-val sym)
+                     _ (bind sym 5)
+                     b (fetch-val sym)
+                     _ (bind sym 10)
+                     c (fetch-val sym)]
+          [a b c])
+        default-bindings)
+      "")))
+
+(with-test
+  (defn get-namespace
+    "Returns the current namespace."
+    []
+    (do-state-t [n (fetch-val 'objclj.core/*ns*)] n))
+
+  (is= ['user 'foo]
+    (parse
+      (eval-state-t
+        (do-state-t [a (get-namespace)
+                     _ (bind 'objclj.core/*ns* 'foo)
+                     b (get-namespace)]
+          [a b])
+        default-bindings)
+      [])))
+
+(with-test
+  (defn resolve
+    "Resolves the given symbol in the current namespace."
+    [s]
+    (do-state-t [sym (m-result s)
+                 n (get-namespace)
+                 ns-sym (m-result (symbol (str n "/" sym)))]
+      (if (namespace s) sym ns-sym)))
+
+  (is= [(symbol "user/foo") (symbol "resolve-test/foo")]
+    (parse
+      (eval-state-t
+        (do-state-t [a (resolve 'foo)
+                     _ (bind 'objclj.core/*ns* 'resolve-test)
+                     b (resolve 'foo)]
+          [a b])
+        default-bindings)
+      [])))
 
 ;;;
 ;;; AST structure
@@ -99,6 +175,45 @@
   ;(is= (list {:a :b}) (strip-empty-forms (list empty-form { :a empty-form, :b empty-form })))
   ;(is= (list {:a :b}) (strip-empty-forms (list empty-form { empty-form :a, :b empty-form }))))
 
+(defmulti expand-form
+  "Expands and/or evaluates a form at compile-time, if possible. Returns a new form.
+  This function does not recurse into sub-forms, as it is meant to operate from the inside out, in coordination with the parser."
+  #(type %))
+
+(defmethod expand-form clojure.lang.Symbol [sym]
+  (resolve sym))
+
+(defmethod expand-form clojure.lang.Keyword [kwd]
+  (let [s (next (str kwd))]
+    ; If the keyword was defined with :: (two colons)...
+    (if (= \: (first s))
+        ; Resolve the keyword in the current namespace and drop the initial colon
+        (keyword (str (get-namespace) "/" (s/join (next s))))
+        kwd)))
+
+(defmethod expand-form clojure.lang.IPersistentList [form]
+  (match (str (first form))
+         "def" (let [[_ sym init] form]
+                 (bind sym init)
+                 (list 'var sym))
+
+         ;; TODO: other special forms
+
+         _ form))
+
+(defmethod expand-form :default [form]
+  form)
+
+;(with-test #'expand-form
+;  (binding [bindings default-bindings]
+;    (let [resolved-foo (symbol "user/foo")]
+;      (is= resolved-foo (expand-form (symbol "foo")))
+;      (is= :foo (expand-form :foo))
+;      (is= :user/foo (expand-form (keyword ":foo")))
+;
+;      (is= (list 'var resolved-foo) (expand-form (list 'def resolved-foo 5)))
+;      (is= 5 (bindings resolved-foo)))))
+
 ;;;
 ;;; Character classes
 ;;;
@@ -116,8 +231,14 @@
   (is whitespace? \,))
 
 ;;;
-;;; Generic parsers
+;;; Generic parsing
 ;;;
+
+(defn parse-str
+  "Runs parser p on string s and returns a two-item vector containing the result and any unparsed part of the string."
+  [p s]
+  (let [result (parse-once p s)]
+    [(-> result :result) (s/join (-> result :remainder))]))
 
 (declare skip-whitespaces)
 
@@ -381,12 +502,12 @@
                kwd sym])))
 
 (with-test
-  (defn parse
+  (defn read-forms
     "Parses a string of Clojure code into an AST. Returns a sequence of forms."
     [str]
     (strip-empty-forms (first (parse-str (many form) str))))
   
-  (is= [true false] (parse "  true ; foobar\n false")))
+  (is= [true false] (read-forms "  true ; foobar\n false")))
 
 ;;;
 ;;; Reader macros

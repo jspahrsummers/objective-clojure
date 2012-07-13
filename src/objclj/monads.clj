@@ -12,3 +12,13 @@
   (let [st (domonad state-m [x (fetch-val :foo)]
              (str x))]
     (is= [":bar" { :foo :bar }] (st { :foo :bar }))))
+
+(defmacro run-state-t
+  "Given an initial state, evaluates a state computation, and returns a two-item sequence of the result and the final state, wrapped in the underlying monad."
+  [st initial]
+  `(~st ~initial))
+
+(defmacro eval-state-t
+  "Given an initial state, evaluates a state computation, and returns the result wrapped in the underlying monad."
+  [st initial]
+  `((m-lift 1 first) (run-state-t ~st ~initial)))
